@@ -1,0 +1,237 @@
+// state transitions related to PUT
+
+// ==================== PUTS ====================
+// SS_MB
+// even though we reply with puts-ack and the sharer deallocates, its ok
+// as it can still reply with inv-ack to upgrader. eventually upgrader
+// will get to MT.
+
+// MT_IB
+// two sharers, one MT-downgraded sharer, one newly promoted sharer
+// ok to remove either one as sharer
+transition({SS,SS_br,SS_pair,SS_MB,SS_MB_br,SS_MB_pair, MT_IB}, L1_PUTS) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_sharer_exist;
+  jj_popL1RequestQueue;
+}
+transition({SS_pair_putStall}, L1_PUTS) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// ==================== PUTS last ====================
+
+transition(SS, L1_PUTS_last, S) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, L1_PUTS_last, S_pair) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair_putStall, L1_PUTS_last) {
+  zz_stallAndWaitL1RequestQueue;
+}
+// wait until SS to resolve PUTS
+transition(SS_br, L1_PUTS_last) {
+  // t_sendWBAck;
+  // kk_removeRequestSharer;
+  // check_nosharer;
+  // jj_popL1RequestQueue;
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// wait until SS to resolve PUTS
+transition({MT_SB,MT_SB_pair, MT_SB_br, MT_IIB, MT_IB}, L1_PUTS_last) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// reply with puts-ack, sharer deallocates but can
+// still reply with inv-ack
+transition(I_I, L1_PUTS_last) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+
+// SS_MB,SS_MB_br
+// case upgrade: impossible
+// before the upgrader's exclusive unblock arrives, 
+// sharer cannot send the last puts as the upgrader is a
+// sharer too. but it only send PUTX
+// case normal get: ok
+// one that initiates the get is not yet the sharer and
+// the only sharer is sending puts_last => ok to respond
+// as the sharer can send out inv-ack with no problem
+transition({SS_MB,SS_MB_br,SS_MB_pair}, L1_PUTS_last) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+
+
+// ==================== L1_PUTS_last_unxoring ====================
+transition(SS_pair, L1_PUTS_last_unxoring, S) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+transition(SS_MB_pair, L1_PUTS_last_unxoring, SS_MB) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair_putStall, L1_PUTS_last_unxoring) {
+  check_xor_locked;
+  zz_stallAndWaitL1RequestQueue;
+}
+// ==================== PUTS old ====================
+transition({SS,SS_br,MT,MT_br,S,S_br,M,M_br}, L1_PUTS_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+transition({SS_pair,MT_pair,S_pair,M_pair}, L1_PUTS_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+transition({SS_pair_putStall}, L1_PUTS_old) {
+    zz_stallAndWaitL1RequestQueue;
+}
+
+
+transition({NP,MT_MB,MT_MB_br,SS_MB, SS_MB_br,
+  IM, IM_existing,ISS, ISS_existing,IS,IS_existing,
+  MT_IB,MT_IIB}, L1_PUTS_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+transition({I_I,S_I,M_I,MCT_I, MT_I,MT_SB,MT_SB_br,MT_SB_pair}, L1_PUTS_old) {
+    zz_stallAndWaitL1RequestQueue;
+}
+
+
+// ==================== PUTX ====================
+transition(SS, L1_PUTX, S) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+// transition(SS, L1_PUTX) {
+//   t_sendWBAck;
+//   // kk_removeRequestSharer;
+//   check_sharer_exist;
+//   jj_popL1RequestQueue;
+// }
+
+transition({IS, ISS, IM, IM_existing, IS_existing, ISS_existing,
+  M, M_I, I_I, S_I, MT_IB, MT_SB, MT_SB_pair}, L1_PUTX) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+// transition({IS, ISS, IM, IM_existing, IS_existing, ISS_existing,
+//   M, M_I, I_I, S_I, MT_IB, MT_SB}, L1_PUTX) {
+//   t_sendWBAck;
+//   // kk_removeRequestSharer;
+//   check_nosharer;
+//   jj_popL1RequestQueue;
+// }
+
+// wait until data is sent out by owner
+// at these state, we are not sure if owner has sent out data yet
+transition({MT_IIB,MCT_I,MT_I}, L1_PUTX){
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// wait until EUB is sent out by owner
+// at these state, we are not sure if owner has sent out EUB yet
+transition({SS_MB, SS_MB_br,SS_MB_pair, MT_MB, MT_MB_br,MT_MB_pair}, L1_PUTX){
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// wait until xor is done
+transition({MT_br,MT_SB_br,SS_br}, L1_PUTX) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// ==================== PUTX_unxoring ====================
+transition(SS_pair, L1_PUTX_unxoring, S) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_nosharer;
+  jj_popL1RequestQueue;
+}
+
+// ==================== PUTX not last ====================
+transition({SS,SS_pair, SS_br}, L1_PUTX_not_last) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_sharer_exist;
+  jj_popL1RequestQueue;
+}
+// transition({SS,SS_br}, L1_PUTX_not_last) {
+//   t_sendWBAck;
+//   // kk_removeRequestSharer;
+//   check_sharer_exist;
+//   jj_popL1RequestQueue;
+// }
+
+transition(MT_IB, L1_PUTX_not_last) {
+  t_sendWBAck;
+  kk_removeRequestSharer;
+  check_sharer_exist;
+  jj_popL1RequestQueue;
+}
+// transition(MT_IB, L1_PUTX_not_last) {
+//   t_sendWBAck;
+//   // kk_removeRequestSharer;
+//   check_sharer_exist;
+//   jj_popL1RequestQueue;
+// }
+transition({SS_MB,SS_MB_pair,SS_MB_br}, L1_PUTX_not_last){
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// ==================== PUTX old ====================
+transition(MT_SB_br, L1_PUTX_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+
+transition({NP, SS, M, MT, M_I, I_I, S_I, 
+  IS, ISS, IM,IM_existing IS_existing, ISS_existing, 
+  MT_IB, MT_SB}, L1_PUTX_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+transition({SS_pair, M_pair, MT_pair, MT_SB_pair}, L1_PUTX_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+
+
+transition({MT_IIB,MCT_I,MT_I},  L1_PUTX_old){
+  zz_stallAndWaitL1RequestQueue;
+}
+
+
+// possible race between unblock and immediate replacement
+transition({SS_MB,SS_MB_br,MT_MB,MT_MB_pair, MT_MB_br}, {L1_PUTX_old}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition({MT_br,SS_br}, L1_PUTX_old) {
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+

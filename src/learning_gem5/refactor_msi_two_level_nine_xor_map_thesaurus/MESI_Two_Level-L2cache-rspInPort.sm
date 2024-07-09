@@ -1,0 +1,161 @@
+  in_port(responseL2Network_in, ResponseMsg, responseToL2Cache, rank = 1) {
+    if (responseL2Network_in.isReady(clockEdge())) {
+      peek(responseL2Network_in, ResponseMsg) {
+        // test wether it's from a local L1 or an off chip source
+        assert(in_msg.Destination.isElement(machineID));
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+        DPRINTF(RubySlicc, "Addr: %#x State: %s Sender: %s Type: %s Dest: %s\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Sender, in_msg.Type, in_msg.Destination);
+
+        bool is_secondary := L2cache.isSecondaryAddr(in_msg.addr);
+        DPRINTF(RubySlicc, "Addr: %#x, is_secondary: %d, is_valid(cache_entry): %s\n", 
+        in_msg.addr, is_secondary, is_valid(cache_entry));
+
+
+        if(machineIDToMachineType(in_msg.Sender) == MachineType:L1Cache) {
+          if(in_msg.Type == CoherenceResponseType:DATA) {
+            if (in_msg.Dirty) {
+              trigger(Event:WB_Data, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:WB_Data_clean, in_msg.addr, cache_entry, tbe);
+            }
+          } else if (in_msg.Type == CoherenceResponseType:ACK) {
+            if (is_secondary) {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_all2, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack2, in_msg.addr, cache_entry, tbe);
+              }
+            } else {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_all, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack, in_msg.addr, cache_entry, tbe);
+              }
+            }
+          } else if (in_msg.Type == CoherenceResponseType:ACKDATA) {
+            if (is_secondary) {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_Data_all2, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack_Data2, in_msg.addr, cache_entry, tbe);
+              }
+            } else {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_Data_all, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack_Data, in_msg.addr, cache_entry, tbe);
+              }
+            }
+          } else if (in_msg.Type == CoherenceResponseType:RECOVERDATA) {
+            if (is_secondary) {
+              trigger(Event:Recover_Data2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Recover_Data, in_msg.addr, cache_entry, tbe);
+            }
+          // } else if (in_msg.Type == CoherenceResponseType:RECONSTRUCTDATAX) {
+          //   if (is_secondary) {
+          //     trigger(Event:Reconstruct_DataX2, in_msg.addr, cache_entry, tbe);
+          //   } else {
+          //     trigger(Event:Reconstruct_DataX, in_msg.addr, cache_entry, tbe);
+          //   }
+          } else {
+            error("unknown message type");
+          }
+
+        } else { // external message
+          if(in_msg.Type == CoherenceResponseType:MEMORY_DATA) {
+            // check if we can do xor
+            if (getState(tbe, cache_entry, in_msg.addr) == State:IS && (data.cacheFull() || dmtNShared.hasRegisteredCandidate(in_msg.DataBlk) || dmt.hasRegisteredCandidate(in_msg.DataBlk)) 
+              && dmt.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold()) {
+              Addr candidate := in_msg.addr;
+              // prioritize nonshared for compression ratio
+              if (dmtNShared.hasRegisteredCandidate(in_msg.DataBlk)) {
+                candidate := dmtNShared.getRandomRegisteredCandidate(in_msg.DataBlk);
+                DPRINTF(RubySlicc, "NS collision CAND Addr: %#x\n",candidate);
+              }
+              else if (dmt.hasRegisteredCandidate(in_msg.DataBlk)) {
+                candidate := dmt.getRandomRegisteredCandidate(in_msg.DataBlk);
+                DPRINTF(RubySlicc, "ALL collision CAND Addr: %#x\n",candidate);
+              } 
+              // else if (dmtNShared.hasAnyRegisteredCandidate()) {
+              //   candidate := dmtNShared.getAnyRandomRegisteredCandidate();
+              //   DPRINTF(RubySlicc, "NS no collision CAND Addr: %#x\n",candidate);
+              // } 
+              else {
+                assert(dmt.hasAnyRegisteredCandidate());
+                candidate := dmt.getAnyRandomRegisteredCandidate();
+                DPRINTF(RubySlicc, "ALL no collision CAND Addr: %#x\n",candidate);
+              }
+
+              Entry xor_candidate_cache_entry := getCacheEntry(candidate);
+              TBE xor_candidate_tbe := TBEs[candidate];
+
+              DPRINTF(RubySlicc, "XOR CAND Addr: %#x State: %s\n",
+                      candidate, getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate));
+              
+              // only need to allocate tag and dir
+              assert (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) && data.cacheAvail(in_msg.addr, block_size_in_bytes)); 
+              data.deallocate(in_msg.addr);
+
+              L2cache.pair(candidate, in_msg.addr);
+              dmt.remove(candidate);
+              dmtShared.remove(candidate);
+              dmtNShared.remove(candidate);
+
+
+              // change state to paired state
+              getCacheEntry(candidate).Dirty2 := cache_entry.Dirty;
+              getCacheEntry(candidate).Sharers2 := cache_entry.Sharers;
+              getCacheEntry(candidate).DataBlk2 := cache_entry.DataBlk;
+
+              L2cache.deallocate(in_msg.addr);
+
+              if (getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate) == State:SS) {
+                setState(xor_candidate_tbe, xor_candidate_cache_entry, candidate, State:SS_IS);
+                setState(tbe, cache_entry, in_msg.addr, State:SS_IS);
+              } else if (getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate) == State:L2ONLY) {
+                setState(xor_candidate_tbe, xor_candidate_cache_entry, candidate, State:L2ONLY_IS);
+                setState(tbe, cache_entry, in_msg.addr, State:L2ONLY_IS);
+                dataNS.deallocate(candidate);
+              } else if (getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate) == State:MT_SB) {
+                setState(xor_candidate_tbe, xor_candidate_cache_entry, candidate, State:MTSB_IS);
+                setState(tbe, cache_entry, in_msg.addr, State:MTSB_IS);
+              } else {
+                DPRINTF(RubySlicc, "XOR CAND Addr: %#x unknow State: %s\n", 
+                candidate, getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate));
+                error("unknow candidate state!");
+              }
+
+              DPRINTF(RubySlicc, "responseL2Network_in: ok xor paired, primary=0x%llx, secondary=0x%llx\n",
+                candidate, in_msg.addr);
+              // Event toTrigger_xor := toTrigger_to_xor_event(toTrigger, getState(tbe, cache_entry, in_msg.addr));
+              trigger(Event:Mem_Data2, in_msg.addr, xor_candidate_cache_entry, tbe);
+            }
+
+
+            if (L2cache.isSecondaryAddr(in_msg.addr)) {
+              error("rsp got Mem_Data2");
+              trigger(Event:Mem_Data2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Mem_Data, in_msg.addr, cache_entry, tbe);
+            }
+          } else if(in_msg.Type == CoherenceResponseType:MEMORY_ACK) {
+              trigger(Event:Mem_Ack, in_msg.addr, cache_entry, tbe);
+          } else if(in_msg.Type == CoherenceResponseType:INV) {
+            if (is_secondary) {
+              trigger(Event:MEM_Inv2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:MEM_Inv, in_msg.addr, cache_entry, tbe);
+            }
+          } else {
+            error("unknown message type");
+          }
+        }
+      }
+    }  // if not ready, do nothing
+  }
+
+  

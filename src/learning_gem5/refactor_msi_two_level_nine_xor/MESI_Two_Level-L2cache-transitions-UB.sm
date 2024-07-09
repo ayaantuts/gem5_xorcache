@@ -1,0 +1,528 @@
+// %%%%%%%%%%%%%%%%%% continue in UB %%%%%%%%%%%%%%%%%%
+  // UB1
+  transition(SS_SS_UB1, {L1_GETS_fwd, L1_GET_INSTR_fwd}) {
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    bf1_forwardRequestToSharer;
+
+    nn_addSharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_L2ONLY_UB1, {L1_GETS_fwd, L1_GET_INSTR_fwd}) {
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    bf1_forwardRequestToSharer;
+
+    nn_addSharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  // UB2
+  transition(SS_SS_UB2, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    bf2_forwardRequestToSharer;
+
+    nns_addSecondarySharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, {L1_GETS_recon, L1_GET_INSTR_recon}) {
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    srs2_sendReconstructSToSharer2;
+    nn_addSharer;
+    
+    aadir_allocateDir;
+
+    set_tagMRU;
+    set_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  
+  transition(L2ONLY_SS_UB2, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    bf2_forwardRequestToSharer;
+
+    nns_addSecondarySharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(L2ONLY_SS_UB2, {L1_GETS_recon, L1_GET_INSTR_recon}, SS_SS_UB2) {
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    srs2_sendReconstructSToSharer2;
+    nn_addSharer;
+
+    l2set2_ssssub2;
+    l2set1_ssssub2;
+    
+    aadir_allocateDir;
+
+    set_tagMRU;
+    set_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  // transition(IS_SS_UB2, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+  //   ipu_incrementPendingUBs;
+  //   bb2_recordBlockedSharer;
+  //   bf2_forwardRequestToSharer;
+
+  //   nns_addSecondarySharer;
+
+  //   set_dirMRU;
+
+  //   uu_profileHit;
+  //   jj_popL1RequestQueue;
+  // }
+
+  // UB12
+  transition(SS_SS_UB12, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    bf2_forwardRequestToSharer;
+
+    nns_addSecondarySharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB12, {L1_GETS_fwd, L1_GET_INSTR_fwd}) {
+    set_primary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    bf1_forwardRequestToSharer;
+
+    nn_addSharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+
+// %%%%%%%%%%%%%%%%%% cross in UB %%%%%%%%%%%%%%%%%%
+  transition(SS_SS_UB1, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}, SS_SS_UB12) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    bf2_forwardRequestToSharer;
+
+    l2set1_ssssub12;
+
+    nns_addSecondarySharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, {L1_GETS_fwd, L1_GET_INSTR_fwd}, SS_SS_UB12) {
+    i_allocateTBE;
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    bf1_forwardRequestToSharer;
+
+    l2set2_ssssub12;
+
+    nn_addSharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+// %%%%%%%%%%%%%%%%%% back to duo-stable %%%%%%%%%%%%%%%%%%
+  // UB1
+  transition(SS_SS_UB1, Unblock_not_all) {
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SS_UB1, Unblock, SS_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+  
+  transition(SS_L2ONLY_UB1, Unblock_not_all) {
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_L2ONLY_UB1, Unblock, SS_L2ONLY) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+
+  // UB2
+  transition(SS_SS_UB2, Unblock_not_all2) {
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SS_UB2, Unblock2, SS_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+  
+  transition(L2ONLY_SS_UB2, Unblock_not_all2) {
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(L2ONLY_SS_UB2, Unblock2, L2ONLY_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+
+  // transition(IS_SS_UB2, Unblock_not_all2) {
+  //   br_removeBlockedSharer;
+  //   dpu_decrementPendingUBs;
+  //   k_popUnblockQueue;
+  // }
+  // transition(IS_SS_UB2, Unblock2, IS_SS) {
+  //   s_deallocateTBE;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   kd2_wakeUpDependents;
+  // }
+
+
+  // UB12
+  transition(SS_SS_UB12, Unblock_not_all) {
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SS_UB12, Unblock, SS_SS_UB2) {
+    s_deallocateTBE;
+    l2set2_ssssub2;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+  transition(SS_SS_UB12, Unblock_not_all2) {
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SS_UB12, Unblock2, SS_SS_UB1) {
+    s_deallocateTBE;
+    l2set1_ssssub1;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+
+// %%%%%%%%%%%%%%%%%%%%%% internal %%%%%%%%%%%%%%%%%%%%%%
+  // SS_SS_UB1
+  transition(SS_SS_UB1, {L1_GETS_pb, L1_GET_INSTR_pb}) {
+    ds1pb2_sendSharedDataToRequestor_piggyback2; 
+
+    nn_addSharer;
+
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, {L1_GETS2_pb, L1_GET_INSTR2_pb}) {
+    ds2pb1_sendSharedData2ToRequestor_piggyback1; 
+    
+    nns_addSecondarySharer;
+
+    set_tagMRU;
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  
+  transition(SS_SS_UB1, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, L1_PUTS_last, L2ONLY_SS_UB1) {
+    l2set2_l2onlyssub1;
+    dddir_deallocateDir;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, L1_PUTS_last2, SS_L2ONLY_UB1) {
+    l2set1_ssl2onlyub1;
+    dddir_deallocateDir;
+    lls_clearSecondarySharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  
+  // SS_SS_UB2
+  transition(SS_SS_UB2, {L1_GETS2_pb, L1_GET_INSTR2_pb}) {
+    ds2pb1_sendSharedData2ToRequestor_piggyback1; 
+    
+    nns_addSecondarySharer;
+
+    set_tagMRU;
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, {L1_GETS_pb, L1_GET_INSTR_pb}) {
+    ds1pb2_sendSharedDataToRequestor_piggyback2; 
+
+    nn_addSharer;
+
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  
+  transition(SS_SS_UB2, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, L1_PUTS_last, L2ONLY_SS_UB2) {
+    l2set2_l2onlyssub2;
+    dddir_deallocateDir;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  
+  // SS_L2ONLY_UB1
+  transition(SS_L2ONLY_UB1, {L1_GETS2_pb, L1_GET_INSTR2_pb}, SS_SS_UB1) {
+    ds2pb1_sendSharedData2ToRequestor_piggyback1; 
+
+    aadir2_allocateDir;
+    nns_addSecondarySharer;
+
+    l2set1_ssssub1;
+    l2set2_ssssub1;
+
+    set_tagMRU;
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_L2ONLY_UB1, {L1_GET_INSTR2_recon, L1_GETS2_recon}, SS_SS_UB1) {
+    set_primary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    srs1_sendReconstructSToSharer;
+    nns_addSecondarySharer;
+
+    l2set1_ssssub1;
+    l2set2_ssssub1;
+
+    aadir_allocateDir;
+
+    set_tagMRU;
+    set_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS_L2ONLY_UB1, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  
+  // L2ONLY_SS_UB2
+  transition(L2ONLY_SS_UB2, {L1_GETS_pb, L1_GET_INSTR_pb}, SS_SS_UB2) {
+    ds1pb2_sendSharedDataToRequestor_piggyback2; 
+
+    aadir_allocateDir;
+    nn_addSharer;
+
+    l2set2_ssssub2;
+
+    set_tagMRU;
+    set1_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(L2ONLY_SS_UB2, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+
+  // SS_SS_UB12
+  transition(SS_SS_UB12, {L1_GETS_pb, L1_GET_INSTR_pb}) {
+    ds1pb2_sendSharedDataToRequestor_piggyback2; 
+
+    nn_addSharer;
+
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB12, {L1_GETS2_pb, L1_GET_INSTR2_pb}) {
+    ds2pb1_sendSharedData2ToRequestor_piggyback1; 
+    
+    nns_addSecondarySharer;
+
+    set_tagMRU;
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  
+  transition(SS_SS_UB12, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB12, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+// %%%%%%%%%%%%%%%%%%%%%% outof XOR %%%%%%%%%%%%%%%%%%%%%% 
+// %%%%%%%%%%%%%%%%%%%%%% stalling %%%%%%%%%%%%%%%%%%%%%%
+  // puts blocked
+  transition({SS_SS_UB1, SS_L2ONLY_UB1, L2ONLY_SS_UB1, SS_SS_UB12}, L1_PUTS_blocked) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({SS_SS_UB2, SS_L2ONLY_UB2, L2ONLY_SS_UB2, SS_SS_UB12}, L1_PUTS_blocked2) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  // repl
+  transition({SS_SS_UB1, SS_L2ONLY_UB1, L2ONLY_SS_UB1, 
+    SS_SS_UB2, SS_L2ONLY_UB2, L2ONLY_SS_UB2, 
+    SS_SS_UB12}, 
+    {L2_Replacement, L2_Replacement_clean, 
+    L2_Replacement2, L2_Replacement_clean2, 
+    L2_Replacement_data_dirty_dirty, L2_Replacement_data_clean_clean,
+    L2_Replacement_data_clean_dirty, L2_Replacement_data_dirty_clean}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({SS_SS_UB1, SS_L2ONLY_UB1, L2ONLY_SS_UB1, 
+    SS_SS_UB2, SS_L2ONLY_UB2, L2ONLY_SS_UB2, 
+    SS_SS_UB12}, 
+    {MEM_Inv, MEM_Inv2}) {
+    zn_recycleResponseNetwork;
+  }
+
+  // get-UB1
+  transition(SS_SS_UB1, {L1_UPGRADE, L1_GETX_pb, L1_GETX_fwd,
+    L1_UPGRADE2, L1_GETX2_pb, L1_GETX2_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(SS_L2ONLY_UB1, {L1_GETX_fwd, L1_UPGRADE, 
+    L1_GETX2_pb, L1_GETX2_recon}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(L2ONLY_SS_UB1, {L1_UPGRADE, L1_GETX_recon, L1_GETX_pb
+    L1_UPGRADE2, L1_GETX2_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  // get-UB2
+  transition(SS_SS_UB2, {L1_UPGRADE2, L1_GETX2_pb, L1_GETX2_fwd,
+    L1_UPGRADE, L1_GETX_pb, L1_GETX_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(L2ONLY_SS_UB2, {L1_GETX_recon, L1_GETX_pb,
+    L1_UPGRADE2, L1_GETX2_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(SS_L2ONLY_UB2, {L1_UPGRADE, L1_GETX_fwd,
+    L1_GETX2_recon, L1_GETX2_pb}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  // transition(IS_SS_UB2, {L1_UPGRADE2, L1_GETX2_pb, L1_GETX2_fwd,
+  //   L1_UPGRADE, L1_GETX_pb, L1_GETX_fwd}) {
+  //   zz_stallAndWaitL1RequestQueue;
+  // }
+
+  // get-UB12
+  transition(SS_SS_UB12, {L1_UPGRADE2, L1_GETX2_pb, L1_GETX2_fwd,
+    L1_UPGRADE, L1_GETX_pb, L1_GETX_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // PUTS
+
+
+  // PUTX
+  transition({SS_SS_UB1, SS_L2ONLY_UB1}, L1_PUTX_not_last) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition(SS_SS_UB2, L1_PUTX_not_last2) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({SS_SS_UB2}, L1_PUTX_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }

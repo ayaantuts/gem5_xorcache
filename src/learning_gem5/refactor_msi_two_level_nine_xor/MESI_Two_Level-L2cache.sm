@@ -1,0 +1,1714 @@
+structure (CacheMemoryDualAddr, external = "yes") {
+  AbstractCacheEntry lookup(Addr);
+  bool cacheAvail(Addr);
+  Addr cacheProbe(Addr);
+  void setMRU(Addr);
+  AbstractCacheEntry allocate(Addr, AbstractCacheEntry);
+  void deallocate(Addr);
+  Cycles getTagLatency();
+  Cycles getDataLatency();
+  void profileDemandHit();
+  void profileDemandMiss();
+  bool isTagPresent(Addr);
+
+  // ============= extra functions to support pairing =============
+  void pair(Addr, Addr); //primary addr goes first
+  void unpair(Addr);
+  bool isSecondaryAddr(Addr); // make sure this addr is present in cache
+  Addr getPrimaryAddr(Addr);
+  bool hasSecondaryAddr(Addr);
+  Addr getSecondaryAddr(Addr);
+}
+
+structure (CacheMemoryProbe, external = "yes") {
+  AbstractCacheEntry lookup(Addr);
+  bool cacheAvail(Addr);
+  Addr cacheProbe(Addr);
+  void setMRU(Addr);
+  AbstractCacheEntry allocate(Addr, AbstractCacheEntry);
+  void deallocate(Addr);
+  Cycles getTagLatency();
+  Cycles getDataLatency();
+  void profileDemandHit();
+  void profileDemandMiss();
+
+  // ============= extra functions to support probing =============
+  int candidateCount(Addr);
+  Addr candidateProbe(Addr);
+  int getCandidateCtThreshold();
+}
+
+// structure(DataProc, external="yes") { // already defined in L1.sm
+//   DataBlock preprocess(DataBlock, DataBlock);
+//   // int compress(DataBlock);
+//   // int peek_compress(DataBlock);
+//   // Cycles decompress();
+// }
+
+machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
+ : CacheMemoryDualAddr * L2cache; // L2cache size needs to be tag+dir
+   CacheMemory * dir;
+   CacheMemory * tag;
+   CacheMemory * data;
+   CacheMemoryProbe * singularTag;
+   CacheMemoryProbe * singularTagShared;
+   DataProc * dataProc;
+   Cycles bypass_latency := 1;
+   Cycles tbe_latency := 1;
+
+  // Message Queues
+  // From local bank of L2 cache TO the network
+  MessageBuffer * DirRequestFromL2Cache, network="To", virtual_network="0",
+    vnet_type="request";  // this L2 bank -> Memory
+
+  MessageBuffer * L1RequestFromL2Cache, network="To", virtual_network="2",
+    vnet_type="request";  // this L2 bank -> a local L1
+
+  MessageBuffer * responseFromL2Cache, network="To", virtual_network="1",
+    vnet_type="response";  // this L2 bank -> a local L1 || Memory
+
+  // FROM the network to this local bank of L2 cache
+  MessageBuffer * unblockToL2Cache, network="From", virtual_network="2",
+    vnet_type="unblock";  // a local L1 || Memory -> this L2 bank
+
+  MessageBuffer * L1RequestToL2Cache, network="From", virtual_network="0",
+    vnet_type="request";  // a local L1 -> this L2 bank
+
+  MessageBuffer * responseToL2Cache, network="From", virtual_network="1",
+    vnet_type="response";  // a local L1 || Memory -> this L2 bank
+{
+  // STATES
+  state_declaration(State, desc="L2 Cache states", default="L2Cache_State_NP") {
+    // Base states
+    NP, AccessPermission:Invalid, desc="Not present in either cache";
+    SS, AccessPermission:Read_Only, desc="L2 cache entry Shared, also present in one or more L1s";
+    L2ONLY, AccessPermission:Read_Write, desc="L2 cache entry Modified, not present in any L1s", format="!b";
+    MT, AccessPermission:Maybe_Stale, desc="L2 cache entry Modified in a local L1, assume L2 copy stale", format="!b";
+
+    // L2 replacement
+    M_I, AccessPermission:Busy, desc="L2 cache replacing, have all acks, sent dirty data to memory, waiting for ACK from memory";
+    MT_I, AccessPermission:Busy, desc="L2 cache replacing, getting data from exclusive";
+    MCT_I, AccessPermission:Busy, desc="L2 cache replacing, clean in L2, getting data or ack from exclusive";
+    I_I, AccessPermission:Busy, desc="L2 replacing clean data, need to inv sharers and then drop data";
+    S_I, AccessPermission:Busy, desc="L2 replacing dirty data, collecting acks from L1s";
+
+    // Transient States for fetching data from memory
+    IS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
+    IM, AccessPermission:Busy, desc="L2 idle, got L1_GETX, issued memory fetch, have not seen response(s) yet";
+
+    // Blocking states
+    SS_OR_MT_MB, AccessPermission:Busy, desc="Blocked for L1_GETX from SS OR MT";
+    // SS_OR_MT_MB_s, AccessPermission:Busy, desc="Blocked for L1_GETX from SS OR MT";
+
+    MT_IIB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, waiting for unblock and data";
+    MT_IB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got unblock, waiting for data";
+    MT_SB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got data,  waiting for unblock";
+    
+    // %%%%%%%%%%%%%%%%% states related to pairing %%%%%%%%%%%%%%%%%
+    // singular states
+    I_I_s, AccessPermission:Busy, desc="L2 replacing clean data, need to inv sharers and then drop data, sink inv-ack to unpair";
+    I_I_sm, AccessPermission:Busy, desc="L2 replacing clean data, need to inv sharers and then drop data, sink inv-ack to unpair";
+    S_I_s, AccessPermission:Busy, desc="L2 replacing clean data, need to inv sharers and then drop data, sink inv-ack to unpair";
+    L2ONLY_s, AccessPermission:Busy, desc="L2ONLY state";
+    SS_s, AccessPermission:Busy, desc="SS state with unrecovered data";
+
+
+    // stable states
+    SS_SS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
+    L2ONLY_SS, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS";
+    SS_L2ONLY, AccessPermission:Busy, desc="primary addr is SS, secondary addr is L2ONLY";
+    // transient states
+    SS_IS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
+    L2ONLY_IS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
+    IS_L2ONLY, AccessPermission:Busy, desc="primary got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet, secondary addr is L2ONLY";
+    IS_SS, AccessPermission:Busy, desc="";
+    IS_IS, AccessPermission:Busy, desc="";
+    
+    L2ONLY_SS_s, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, waiting for PUTSDATA";
+    SS_SSMB_s, AccessPermission:Busy, desc="primary addr is SS, secondary addr is SS getting L1_GETX2, waiting for recovery data";
+    SSMB_SS_s, AccessPermission:Busy, desc="secondary addr is SS, primary addr is SS getting L1_GETX2, waiting for recovery data";
+    L2ONLY_SSMB_s, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS getting L1_GETX2, waiting for recovery data";
+    SSMB_L2ONLY_s, AccessPermission:Busy, desc="primary addr is SS getting L1_GETX, secondary addr is L2ONLY, waiting for recovery data";
+
+    L2ONLY_SS_r1, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, waiting for WBDATA";
+    SS_L2ONLY_r2, AccessPermission:Busy, desc="primary addr is SS, secondary addr is L2ONLY got repl dirty, waiting for WBDATA";
+    SS_L2ONLY_s, AccessPermission:Busy, desc="primary addr is SS, secondary addr is L2ONLY, waiting for PUTSDATA";
+    L2ONLY_SI_dd, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, got replacement, waiting for INVDATA";
+    L2ONLY_II_dc, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, got replacement, waiting for INVDATA";
+    II_L2ONLY_cd, AccessPermission:Busy, desc="primary addr is SS got replacement, secondary addr is L2ONLY, waiting for INVDATA";
+    SI_L2ONLY_dd, AccessPermission:Busy, desc="secondary addr is L2ONLY, primary addr is SS, got replacement both, waiting for INVDATA";
+    SI_L2ONLY_dc, AccessPermission:Busy, desc="secondary addr is L2ONLY, primary addr is SS, got replacement both, waiting for INVDATA";
+    SI_SI_dd, AccessPermission:Busy, desc="secondary addr is SS, primary addr is SS, got replacement both, waiting for INVDATA";
+    SI_MI_dd, AccessPermission:Busy, desc="secondary addr is SS, primary addr is SS, got replacement both but got all acks, waiting for INVDATA";
+    SI_MI_dc, AccessPermission:Busy, desc="secondary addr is SS, primary addr is SS, got replacement both but got all acks, waiting for INVDATA";
+    SI_II_dc, AccessPermission:Busy, desc="secondary addr is SS, primary addr is SS, got replacement both, waiting for INVDATA";
+    II_SI_cd, AccessPermission:Busy, desc="primary addr is SS, secondary addr is SS, got replacement both, waiting for INVDATA";
+    II_MI_cd, AccessPermission:Busy, desc="primary addr is SS, secondary addr is SS, got replacement both but got all acks, waiting for INVDATA";
+    SI_L2ONLY_r1, AccessPermission:Busy, desc="secondary addr is L2ONLY, primary addr is SS, got replacement primary, waiting for INVDATA";
+    SI_SS_r1, AccessPermission:Busy, desc="secondary addr is SS, primary addr is SS, got replacement primary, waiting for INVDATA";
+    SS_SI_r2, AccessPermission:Busy, desc="primary addr is SS, secondary addr is SS, got replacement secondary, waiting for INVDATA";
+    L2ONLY_SI_r2, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, got replacement secondary, waiting for INVDATA";
+
+    //ubs
+    SS_SS_UB1, AccessPermission:Busy, desc="Block waiting on unblock1";
+    SS_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
+    SS_SS_UB12, AccessPermission:Busy, desc="Block waiting on unblock1 and unblock2";
+    L2ONLY_SS_UB1, AccessPermission:Busy, desc="Block waiting on unblock1";
+    L2ONLY_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
+    SS_L2ONLY_UB1, AccessPermission:Busy, desc="Block waiting on unblock1";
+    SS_L2ONLY_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
+    // IS_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
+  }
+
+  // EVENTS
+  enumeration(Event, desc="L2 Cache events") {
+    // L2 events
+
+    // events initiated by the local L1s
+    L1_GET_INSTR,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR_pb,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR_fwd,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR_recon,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR2_pb,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR2_fwd,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR2_recon,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GETS,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS_pb,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS_fwd,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS_recon,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS2_pb,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS2_fwd,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS2_recon,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETX,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX_pb,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX_fwd,                 desc="";
+    L1_GETX_recon,                 desc="";
+    L1_GETX2_pb,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX2_fwd,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX2_recon,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX2,                 desc="a L1D GETX request for a block maped to us";
+    L1_UPGRADE,                 desc="a L1D GETX request for a block maped to us";
+    L1_UPGRADE2,                 desc="a L1D GETX request for a block maped to us";
+
+    L1_PUTX,                 desc="L1 replacing data";
+    L1_PUTX_not_last,                 desc="L1 replacing data";
+    L1_PUTX2,                 desc="L1 replacing data";
+    L1_PUTX_not_last2,             desc="L1 replacing data";
+    L1_PUTX_old,             desc="L1 replacing data, but no longer sharer";
+    L1_PUTX_XOR,             desc="L1 replacing data";
+
+    L1_PUTS_not_last,             desc="L1 replacing data from S state, there are other sharers";
+    L1_PUTS_not_last2,             desc="L1 replacing data from S state, there are other sharers";
+    L1_PUTS_last,                 desc="L1 replacing data from S state, there are no other sharers";
+    L1_PUTS_last2,                 desc="L1 replacing data from S state, there are no other sharers";
+    L1_PUTS_last_data,                 desc="L1 replacing data from S state, there are no other sharers";
+    L1_PUTS_last_data2,                 desc="L1 replacing data from S state, there are no other sharers";
+    L1_PUTS_old,                 desc="L1 replacing data from S state, but no longer sharer";
+    L1_PUTS_old2,                 desc="L1 replacing data from S state, but no longer sharer";
+    L1_PUTS_blocked,                 desc="L1 replacing data from S state, but no longer sharer";
+    L1_PUTS_blocked2,                 desc="L1 replacing data from S state, but no longer sharer";
+
+    // events initiated by this L2
+    L2_Replacement,     desc="L2 Replacement", format="!r";
+    L2_Replacement_clean,     desc="L2 Replacement, but data is clean", format="!r";
+
+    L2_Replacement2,     desc="L2 Replacement, secondary", format="!r";
+    L2_Replacement_clean2,     desc="L2 Replacement, but data is clean, secondary", format="!r";
+
+    L2_Replacement_data_dirty_dirty,     desc="L2 Replacement", format="!r";
+    L2_Replacement_data_clean_dirty,     desc="L2 Replacement", format="!r";
+    L2_Replacement_data_clean_clean,     desc="L2 Replacement", format="!r";
+    L2_Replacement_data_dirty_clean,     desc="L2 Replacement", format="!r";
+
+    // events from memory controller
+    Mem_Data,     desc="data from memory", format="!r";
+    Mem_Data2,     desc="data from memory", format="!r";
+    Mem_Ack,     desc="ack from memory", format="!r";
+
+    // M->S data writeback
+    WB_Data,  desc="data from L1";
+    WB_Data_clean,  desc="clean data from L1";
+    Ack,      desc="writeback ack";
+    Ack_all,      desc="writeback ack";
+    Ack2,      desc="writeback ack";
+    Ack_all2,      desc="writeback ack";
+
+    Ack_Data,      desc="writeback ack";
+    Ack_Data_all,      desc="writeback ack";
+    Ack_Data2,      desc="writeback ack";
+    Ack_Data_all2,      desc="writeback ack";
+    Recover_Data,      desc="recover data (original)";
+    Recover_Data2,      desc="recover data (original)";
+    // Reconstruct_DataX,      desc="reconstructed data";
+    // Reconstruct_DataX2,      desc="reconstructed data";
+
+    Unblock, desc="Unblock from L1 requestor";
+    Unblock_not_all, desc="Unblock from L1 requestor";
+    Unblock2, desc="Unblock from L1 requestor";
+    Unblock_not_all2, desc="Unblock from L1 requestor";
+    Exclusive_Unblock, desc="Unblock from L1 requestor";
+    Exclusive_Unblock2, desc="Unblock from L1 requestor";
+    Exclusive_Unblock_Data, desc="Unblock from L1 requestor";
+    Exclusive_Unblock_Data2, desc="Unblock from L1 requestor";
+
+    MEM_Inv, desc="Invalidation from directory";
+    MEM_Inv2, desc="Invalidation from directory";
+
+    L1_GETS_XOR,                 desc="a L1D GETS request for a block maped to us, upgraded to XOR";
+    L1_GET_INSTR_XOR,            desc="a L1I GET INSTR request for a block maped to us, upgraded to XOR";
+
+    L1_GETS_XOR_MT,                 desc="a L1D GETS request for a block maped to us, upgraded to XOR";
+    L1_GET_INSTR_XOR_MT,            desc="a L1I GET INSTR request for a block maped to us, upgraded to XOR";
+  }
+
+  // TYPES
+
+  // CacheEntry
+  structure(Entry, desc="...", interface="AbstractCacheEntry") {
+    State CacheState,          desc="cache state";
+    NetDest Sharers,               desc="tracks the L1 shares on-chip";
+    NetDest Sharers2,               desc="tracks the L1 shares on-chip";
+    MachineID Exclusive,          desc="Exclusive holder of block";
+    DataBlock DataBlk,       desc="data 1 for the block";
+    DataBlock DataBlk2,       desc="data 2 for the block";
+    DataBlock DataBlk_phy,       desc="physical data for the block";
+    bool Dirty, default="false", desc="data is dirty";
+    bool Dirty2, default="false", desc="data is dirty";
+
+  }
+
+  // TBE fields
+  structure(TBE, desc="...") {
+    Addr addr,            desc="Physical address for this TBE";
+    State TBEState,             desc="Transient state";
+    DataBlock DataBlk,          desc="Buffer for the data block";
+    DataBlock DataBlk_phy,          desc="Buffer for the physical data block 1";
+    bool Dirty, default="false", desc="Data is Dirty";
+
+    NetDest L1_GetS_IDs,            desc="Set of the internal processors that want the block in shared state";
+    MachineID L1_GetX_ID,          desc="ID of the L1 cache to forward the block to once we get a response";
+    int pendingAcks,            desc="number of pending acks for invalidates during writeback";
+    int pendingUBs,            desc="number of pending unblocks";
+
+    Addr paired,            desc="paired address for this TBE";
+    NetDest blockedSharer,          desc="ID of the L1 cache to block replacement";
+  }
+
+  structure(TBETable, external="yes") {
+    TBE lookup(Addr);
+    void allocate(Addr);
+    void deallocate(Addr);
+    bool isPresent(Addr);
+  }
+
+  TBETable TBEs, template="<L2Cache_TBE>", constructor="m_number_of_TBEs";
+
+  Tick clockEdge();
+  Tick cyclesToTicks(Cycles c);
+  Cycles ticksToCycles(Tick t);
+
+  void set_cache_entry(AbstractCacheEntry a);
+  void unset_cache_entry();
+  void set_tbe(TBE a);
+  void unset_tbe();
+  void wakeUpBuffers(Addr a);
+  void wakeUpAllBuffers(Addr a);// I added this
+  void profileMsgDelay(int virtualNetworkType, Cycles c);
+  MachineID mapAddressToMachine(Addr addr, MachineType mtype);
+
+  Cycles getMaxofTwo(Cycles a, Cycles b) {
+    if (a > b) {
+      return a;
+    } else {
+      return b;
+    }
+  }
+
+  // inclusive cache, returns L2 entries only
+  Entry getCacheEntry(Addr addr), return_by_pointer="yes" {
+    return static_cast(Entry, "pointer", L2cache[addr]);
+  }
+
+  bool isSharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    if (is_valid(cache_entry)) {
+      return cache_entry.Sharers.isElement(requestor);
+    } else {
+      return false;
+    }
+  }
+  bool isSecondarySharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    if (is_valid(cache_entry)) {
+      return cache_entry.Sharers2.isElement(requestor);
+    } else {
+      return false;
+    }
+  }
+
+  void addSharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "machineID: %s, requestor: %s added for address: %#x\n",
+            machineID, requestor, addr);
+    cache_entry.Sharers.add(requestor);
+  }
+  void removeSharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "machineID: %s, requestor: %s removed for address: %#x\n",
+            machineID, requestor, addr);
+    cache_entry.Sharers.remove(requestor);
+  }
+
+  void addSecondarySharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "machineID: %s, requestor2: %s added for address: %#x\n",
+            machineID, requestor, addr);
+    cache_entry.Sharers2.add(requestor);
+  }
+  void removeSecondarySharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "machineID: %s, requestor2: %s removed for address: %#x\n",
+            machineID, requestor, addr);
+    cache_entry.Sharers2.remove(requestor);
+  }
+
+  State getState(TBE tbe, Entry cache_entry, Addr addr) {
+    if(is_valid(tbe)) {
+      return tbe.TBEState;
+    } else if (is_valid(cache_entry)) {
+      return cache_entry.CacheState;
+    }
+    return State:NP;
+  }
+
+  void setState(TBE tbe, Entry cache_entry, Addr addr, State state) {
+    // MUST CHANGE
+    if (is_valid(tbe)) {
+      tbe.TBEState := state;
+    }
+
+    if (is_valid(cache_entry)) {
+      cache_entry.CacheState := state;
+    }
+  }
+
+  void setCacheEntryState(Entry cache_entry, Addr addr, State state) {
+    TBE tbe := TBEs[addr];
+    assert(!is_valid(tbe));
+    assert(is_valid(cache_entry));
+    cache_entry.CacheState := state;
+  }
+
+  AccessPermission getAccessPermission(Addr addr) {
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      DPRINTF(RubySlicc, "%s\n", L2Cache_State_to_permission(tbe.TBEState));
+      return L2Cache_State_to_permission(tbe.TBEState);
+    }
+
+    Entry cache_entry := getCacheEntry(addr);
+    if(is_valid(cache_entry)) {
+      DPRINTF(RubySlicc, "%s\n", L2Cache_State_to_permission(cache_entry.CacheState));
+      return L2Cache_State_to_permission(cache_entry.CacheState);
+    }
+
+    DPRINTF(RubySlicc, "%s\n", AccessPermission:NotPresent);
+    return AccessPermission:NotPresent;
+  }
+
+  DataBlock getDataBlockLogical(Addr addr){
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      DPRINTF(RubySlicc, "getDataBlockLogical: tbe valid, blk=%s\n", tbe.DataBlk);
+      return tbe.DataBlk;
+    }
+    Entry L2cache_entry := getCacheEntry(addr);
+    if(is_valid(L2cache_entry)) {
+      if (L2cache.isSecondaryAddr(addr)) {
+        DPRINTF(RubySlicc, "getDataBlockLogical: l2cache valid, blk2=%s\n", L2cache_entry.DataBlk2);
+        return L2cache_entry.DataBlk2;
+      } else {
+        DPRINTF(RubySlicc, "getDataBlockLogical: l2cache valid, blk1=%s\n", L2cache_entry.DataBlk);
+        return L2cache_entry.DataBlk;
+      }
+    } else {
+      error("L2: getDataBlockLogical: Invalid");
+    }
+  }
+
+  void functionalRead(Addr addr, Packet *pkt) {
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      testAndRead(addr, tbe.DataBlk, pkt);
+    } else {
+      if (L2cache.isSecondaryAddr(addr)) {
+        testAndRead(addr, getCacheEntry(addr).DataBlk2, pkt);
+      } else {
+        testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+      }
+    }
+  }
+
+  int functionalWrite(Addr addr, Packet *pkt) {
+    int num_functional_writes := 0;
+
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      num_functional_writes := num_functional_writes +
+        testAndWrite(addr, tbe.DataBlk, pkt);
+      DPRINTF(RubySlicc, "functionalWrite: tbe.DataBlk=%s\n", tbe.DataBlk);
+      return num_functional_writes;
+    }
+
+    if (L2cache.isSecondaryAddr(addr)) {
+      num_functional_writes := num_functional_writes +
+          testAndWrite(addr, getCacheEntry(addr).DataBlk2, pkt);
+
+      // update physical data too
+      Addr primary_addr := L2cache.getPrimaryAddr(addr);
+      DataBlock AB_p := dataProc.preprocess(getDataBlockLogical(primary_addr), getCacheEntry(addr).DataBlk2);
+      getCacheEntry(addr).DataBlk_phy := AB_p;
+
+      DPRINTF(RubySlicc, "functionalWrite: DataBlk2=%s, DataBlk_phy=%s\n", 
+        getCacheEntry(addr).DataBlk2, getCacheEntry(addr).DataBlk_phy);
+      return num_functional_writes;
+    } else {
+      num_functional_writes := num_functional_writes +
+          testAndWrite(addr, getCacheEntry(addr).DataBlk, pkt);
+      // update physical data too
+      if (L2cache.hasSecondaryAddr(addr)) {
+        Addr secondary_addr := L2cache.getSecondaryAddr(addr);
+        DataBlock A_pB := dataProc.preprocess(getCacheEntry(addr).DataBlk, getDataBlockLogical(secondary_addr));
+        getCacheEntry(addr).DataBlk_phy := A_pB;
+      } else {
+        getCacheEntry(addr).DataBlk_phy := getCacheEntry(addr).DataBlk;
+      }
+      DPRINTF(RubySlicc, "functionalWrite: DataBlk=%s, DataBlk_phy=%s\n", 
+        getCacheEntry(addr).DataBlk, getCacheEntry(addr).DataBlk_phy);
+      return num_functional_writes;
+    }
+  }
+
+  void setAccessPermission(Entry cache_entry, Addr addr, State state) {
+    if (is_valid(cache_entry)) {
+      cache_entry.changePermission(L2Cache_State_to_permission(state));
+    }
+  }
+
+  Event L1Cache_request_type_to_event(CoherenceRequestType type, Addr addr,
+                                      MachineID requestor, Entry cache_entry, TBE tbe) {
+    if(type == CoherenceRequestType:GETS) {
+      if (L2cache.isSecondaryAddr(addr)) {
+        if (is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor)) {
+          return Event:L1_GETS2_pb;
+        } else if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback sharers are %s\n",cache_entry.Sharers);
+          return Event:L1_GETS2_fwd;
+        } else if (is_valid(cache_entry) && cache_entry.Sharers.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback nor fwd\n");
+          return Event:L1_GETS2_recon;
+        } else {
+          error("both AB no sharer\n");
+        }
+      } else {
+        if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
+          return Event:L1_GETS_pb;
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers.count() > 0) {
+          return Event:L1_GETS_fwd;
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback nor fwd\n");
+          return Event:L1_GETS_recon;
+        } else {
+          return Event:L1_GETS;
+        }
+      }
+    } else if(type == CoherenceRequestType:GET_INSTR) {
+      if (L2cache.isSecondaryAddr(addr)) {
+        if (is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor)) {
+          return Event:L1_GET_INSTR2_pb;
+        } else if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback sharers are %s\n",cache_entry.Sharers);
+          return Event:L1_GET_INSTR2_fwd;
+        } else if (is_valid(cache_entry) && cache_entry.Sharers.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback nor fwd\n");
+          return Event:L1_GET_INSTR2_recon;
+        } else {
+          error("both AB no sharer\n");
+        }
+      } else {
+        if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
+          return Event:L1_GET_INSTR_pb;
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers.count() > 0) {
+          return Event:L1_GET_INSTR_fwd;
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback nor fwd\n");
+          return Event:L1_GET_INSTR_recon;
+        } else {
+          return Event:L1_GET_INSTR;
+        }
+      }
+    } else if (type == CoherenceRequestType:GETX) {
+      if (L2cache.isSecondaryAddr(addr)) {
+        if (is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor)) {
+          return Event:L1_GETX2_pb;
+        } else if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback sharers are %s\n",cache_entry.Sharers);
+          return Event:L1_GETX2_fwd;
+        } else if (is_valid(cache_entry) && cache_entry.Sharers.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback nor fwd\n");
+          return Event:L1_GETX2_recon;
+        } else {
+          error("both AB no sharer\n");
+        }
+      } else {
+        if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
+          return Event:L1_GETX_pb;
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback sharers are %s\n",cache_entry.Sharers2);
+          return Event:L1_GETX_fwd;
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.count() > 0) {
+          DPRINTF(RubySlicc, "cannot piggyback nor fwd\n");
+          return Event:L1_GETX_recon;
+        } else {
+          return Event:L1_GETX;
+        }
+      }
+    } else if (type == CoherenceRequestType:UPGRADE) {
+      if (L2cache.isSecondaryAddr(addr)) {
+        if ( is_valid(cache_entry) && cache_entry.Sharers2.isElement(requestor) ) {
+          return Event:L1_UPGRADE2;
+        } else {
+          return Event:L1_GETX2;
+        }
+      } else {
+        if ( is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor) ) {
+          return Event:L1_UPGRADE;
+        } else {
+          return Event:L1_GETX;
+        }
+      }
+    } else if (type == CoherenceRequestType:PUTX) {
+      if (L2cache.isSecondaryAddr(addr)) {
+        if (isSecondarySharer(addr, requestor, cache_entry)) {
+          if (cache_entry.Sharers2.count() == 1) {
+            return Event:L1_PUTX2;
+          } else {
+            return Event:L1_PUTX_not_last2;
+          }
+        }
+      } else {
+        if (isSharer(addr, requestor, cache_entry)) {
+          if (cache_entry.Sharers.count() == 1) {
+            return Event:L1_PUTX;
+          } else {
+            return Event:L1_PUTX_not_last;
+          }
+        }
+      }
+      return Event:L1_PUTX_old;
+    } else if (type == CoherenceRequestType:PUTS) {
+      if (is_valid(tbe)) {
+        if (tbe.blockedSharer.isElement(requestor)) {
+          if (L2cache.isSecondaryAddr(addr)) {
+            return Event:L1_PUTS_blocked2;
+          } else {
+            return Event:L1_PUTS_blocked;
+          }
+        }
+      }
+      if (is_valid(cache_entry)) {
+        if (L2cache.isSecondaryAddr(addr)) {
+          if (isSecondarySharer(addr, requestor, cache_entry)) {
+            if (cache_entry.Sharers2.count() == 1) {
+              return Event:L1_PUTS_last2;
+            } else {
+              return Event:L1_PUTS_not_last2;
+            }
+          }
+          else { // no longer a sharer
+            return Event:L1_PUTS_old2;
+          }
+        } else {
+          if (isSharer(addr, requestor, cache_entry)) {
+            if (cache_entry.Sharers.count() == 1) {
+              return Event:L1_PUTS_last;
+            } else {
+              return Event:L1_PUTS_not_last;
+            }
+          }
+          else { // no longer a sharer
+            return Event:L1_PUTS_old;
+          }
+        }
+      } else {
+        return Event:L1_PUTS_old;
+      }
+    } else if (type == CoherenceRequestType:PUTSDATA) {
+      assert(is_valid(cache_entry));
+      if (L2cache.isSecondaryAddr(addr)) {
+        assert (cache_entry.Sharers2.count() == 1);
+        return Event:L1_PUTS_last_data2;
+      } else if (isSharer(addr, requestor, cache_entry)) {
+          assert (cache_entry.Sharers.count() == 1);
+          return Event:L1_PUTS_last_data;
+      } else {
+        error("PUTSDATA when not the last sharer");
+      }
+    } else {
+      DPRINTF(RubySlicc, "address: %#x, Request Type: %s\n", addr, type);
+      error("Invalid L1 forwarded request type");
+    }
+  }
+
+  Event toTrigger_to_xor_event(Event toTrigger, State curState) {
+    if (toTrigger == Event:L1_GETS) {
+      if (curState == State:NP || curState == State:I_I) {
+        return Event:L1_GETS_XOR;
+      } else if (curState == State:MT) {
+        return Event:L1_GETS_XOR_MT;
+      } else {
+        error("L1_GETS from incorrect state");
+      }
+    } 
+    else if (toTrigger == Event:L1_GET_INSTR) {
+      if (curState == State:NP) {
+        return Event:L1_GET_INSTR_XOR;
+      } else if (curState == State:MT) {
+        return Event:L1_GET_INSTR_XOR_MT;
+      } else {
+        error("L1_GET_INSTR from incorrect state");
+      }
+    } 
+    else if (toTrigger == Event:L1_PUTX) {
+      return Event:L1_PUTX_XOR;
+    }
+    else {
+      error("Invalid toTrigger request type");
+    }
+  }
+
+  int getPendingAcks(TBE tbe) {
+    return tbe.pendingAcks;
+  }
+  int getPendingUBs(TBE tbe) {
+    return tbe.pendingUBs;
+  }
+
+  bool isDirty(Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    return cache_entry.Dirty;
+  }
+  bool isSecondaryDirty(Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    return cache_entry.Dirty2;
+  }
+
+  // ** OUT_PORTS **
+
+  out_port(L1RequestL2Network_out, RequestMsg, L1RequestFromL2Cache);
+  out_port(DirRequestL2Network_out, RequestMsg, DirRequestFromL2Cache);
+  out_port(responseL2Network_out, ResponseMsg, responseFromL2Cache);
+
+
+  in_port(L1unblockNetwork_in, ResponseMsg, unblockToL2Cache, rank = 2) {
+    if(L1unblockNetwork_in.isReady(clockEdge())) {
+      peek(L1unblockNetwork_in,  ResponseMsg) {
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+        DPRINTF(RubySlicc, "Addr: %#x State: %s Sender: %s Type: %s Dest: %s\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Sender, in_msg.Type, in_msg.Destination);
+
+        bool is_secondary := L2cache.isSecondaryAddr(in_msg.addr);
+        DPRINTF(RubySlicc, "Addr: %#x, is_secondary: %d, is_valid(cache_entry): %s\n", 
+        in_msg.addr, is_secondary, is_valid(cache_entry));
+
+        assert(in_msg.Destination.isElement(machineID));
+        if (in_msg.Type == CoherenceResponseType:EXCLUSIVE_UNBLOCK) {
+          if (is_secondary) {
+            trigger(Event:Exclusive_Unblock2, in_msg.addr, cache_entry, tbe);
+          } else {
+            trigger(Event:Exclusive_Unblock, in_msg.addr, cache_entry, tbe);
+          }
+        } else if (in_msg.Type == CoherenceResponseType:EXCLUSIVE_UNBLOCK_DATA) {
+          if (is_secondary) {
+            trigger(Event:Exclusive_Unblock_Data2, in_msg.addr, cache_entry, tbe);
+          } else {
+            trigger(Event:Exclusive_Unblock_Data, in_msg.addr, cache_entry, tbe);
+          }
+        } else if (in_msg.Type == CoherenceResponseType:UNBLOCK) {
+          if (is_secondary) {
+            if (is_valid(tbe) && getPendingUBs(tbe) != 1) {
+              trigger(Event:Unblock_not_all2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Unblock2, in_msg.addr, cache_entry, tbe);
+            }
+          } else {
+            if (is_valid(tbe) && getPendingUBs(tbe) != 1) {
+              trigger(Event:Unblock_not_all, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Unblock, in_msg.addr, cache_entry, tbe);
+            }
+          }
+        } else {
+          error("unknown unblock message");
+        }
+      }
+    }
+  }
+
+  // Response  L2 Network - response msg to this particular L2 bank
+  in_port(responseL2Network_in, ResponseMsg, responseToL2Cache, rank = 1) {
+    if (responseL2Network_in.isReady(clockEdge())) {
+      peek(responseL2Network_in, ResponseMsg) {
+        // test wether it's from a local L1 or an off chip source
+        assert(in_msg.Destination.isElement(machineID));
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+        DPRINTF(RubySlicc, "Addr: %#x State: %s Sender: %s Type: %s Dest: %s\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Sender, in_msg.Type, in_msg.Destination);
+
+        bool is_secondary := L2cache.isSecondaryAddr(in_msg.addr);
+        DPRINTF(RubySlicc, "Addr: %#x, is_secondary: %d, is_valid(cache_entry): %s\n", 
+        in_msg.addr, is_secondary, is_valid(cache_entry));
+
+
+        if(machineIDToMachineType(in_msg.Sender) == MachineType:L1Cache) {
+          if(in_msg.Type == CoherenceResponseType:DATA) {
+            if (in_msg.Dirty) {
+              trigger(Event:WB_Data, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:WB_Data_clean, in_msg.addr, cache_entry, tbe);
+            }
+          } else if (in_msg.Type == CoherenceResponseType:ACK) {
+            if (is_secondary) {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_all2, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack2, in_msg.addr, cache_entry, tbe);
+              }
+            } else {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_all, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack, in_msg.addr, cache_entry, tbe);
+              }
+            }
+          } else if (in_msg.Type == CoherenceResponseType:ACKDATA) {
+            if (is_secondary) {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_Data_all2, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack_Data2, in_msg.addr, cache_entry, tbe);
+              }
+            } else {
+              if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+                trigger(Event:Ack_Data_all, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:Ack_Data, in_msg.addr, cache_entry, tbe);
+              }
+            }
+          } else if (in_msg.Type == CoherenceResponseType:RECOVERDATA) {
+            if (is_secondary) {
+              trigger(Event:Recover_Data2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Recover_Data, in_msg.addr, cache_entry, tbe);
+            }
+          // } else if (in_msg.Type == CoherenceResponseType:RECONSTRUCTDATAX) {
+          //   if (is_secondary) {
+          //     trigger(Event:Reconstruct_DataX2, in_msg.addr, cache_entry, tbe);
+          //   } else {
+          //     trigger(Event:Reconstruct_DataX, in_msg.addr, cache_entry, tbe);
+          //   }
+          } else {
+            error("unknown message type");
+          }
+
+        } else { // external message
+          if(in_msg.Type == CoherenceResponseType:MEMORY_DATA) {
+            if (is_secondary) {
+              trigger(Event:Mem_Data2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Mem_Data, in_msg.addr, cache_entry, tbe);
+            }
+          } else if(in_msg.Type == CoherenceResponseType:MEMORY_ACK) {
+              trigger(Event:Mem_Ack, in_msg.addr, cache_entry, tbe);
+          } else if(in_msg.Type == CoherenceResponseType:INV) {
+            if (is_secondary) {
+              trigger(Event:MEM_Inv2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:MEM_Inv, in_msg.addr, cache_entry, tbe);
+            }
+          } else {
+            error("unknown message type");
+          }
+        }
+      }
+    }  // if not ready, do nothing
+  }
+
+  // L1 Request
+  include "MESI_Two_Level-L2cache-reqInPort.sm";
+
+  // ACTIONS
+
+  action(a_issueFetchToMemory, "a", desc="fetch data from memory") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(DirRequestL2Network_out, RequestMsg, getMaxofTwo(L2cache.getTagLatency(), dir.getTagLatency())) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceRequestType:GETS;
+        out_msg.Requestor := machineID;
+        out_msg.Destination.add(mapAddressToMachine(address, MachineType:Directory));
+        out_msg.MessageSize := MessageSizeType:Control;
+        out_msg.AccessMode := in_msg.AccessMode;
+        out_msg.Prefetch := in_msg.Prefetch;
+      }
+    }
+  }
+
+  action(b_forwardRequestToExclusive, "b", desc="Forward request to the exclusive L1") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := in_msg.Type;
+        out_msg.Requestor := in_msg.Requestor;
+        out_msg.Destination.add(cache_entry.Exclusive);
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+      }
+    }
+  }
+
+  action(c_exclusiveReplacement, "c", desc="Send data to memory") {
+    enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()) {
+      assert(is_valid(cache_entry));
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:MEMORY_DATA;
+      out_msg.Sender := machineID;
+      out_msg.Destination.add(mapAddressToMachine(address, MachineType:Directory));
+      out_msg.DataBlk := cache_entry.DataBlk;
+      out_msg.Dirty := cache_entry.Dirty;
+      out_msg.MessageSize := MessageSizeType:Response_Data;
+      DPRINTF(RubySlicc, "c_exclusiveReplacement sending %#x, DataBlk=%s\n", address, cache_entry.DataBlk);
+    }
+  }
+
+  action(c_exclusiveCleanReplacement, "cc", desc="Send ack to memory for clean replacement") {
+    enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:ACK;
+      out_msg.Sender := machineID;
+      out_msg.Destination.add(mapAddressToMachine(address, MachineType:Directory));
+      out_msg.MessageSize := MessageSizeType:Response_Control;
+    }
+  }
+
+  action(ct_exclusiveReplacementFromTBE, "ct", desc="Send data to memory") {
+    enqueue(responseL2Network_out, ResponseMsg, tbe_latency) {
+      assert(is_valid(tbe));
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:MEMORY_DATA;
+      out_msg.Sender := machineID;
+      out_msg.Destination.add(mapAddressToMachine(address, MachineType:Directory));
+      out_msg.DataBlk := tbe.DataBlk;
+      out_msg.Dirty := tbe.Dirty;
+      out_msg.MessageSize := MessageSizeType:Response_Data;
+      DPRINTF(RubySlicc, "ct_exclusiveReplacementFromTBE sending %#x, DataBlk=%s\n", address, tbe.DataBlk);
+    }
+  }
+
+  action(d_sendDataToRequestor, "d", desc="Send data from cache to reqeustor") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.DataBlk := cache_entry.DataBlk;
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers.count();
+        if (cache_entry.Sharers.isElement(in_msg.Requestor)) {
+          out_msg.AckCount := out_msg.AckCount + 1;
+        }
+      }
+    }
+  }
+
+  action(ds_sendSharedDataToRequestor, "ds", desc="Send data from cache to reqeustor") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.DataBlk := cache_entry.DataBlk;
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.AckCount := 0;
+      }
+    }
+  }
+
+  action(e_sendDataToGetSRequestors, "e", desc="Send data from cache to all GetS IDs") {
+    assert(is_valid(tbe));
+    assert(tbe.L1_GetS_IDs.count() > 0);
+    enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+      assert(is_valid(cache_entry));
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:DATA;
+      out_msg.Sender := machineID;
+      out_msg.Destination := tbe.L1_GetS_IDs;  // internal nodes
+      out_msg.DataBlk := cache_entry.DataBlk;
+      out_msg.MessageSize := MessageSizeType:Response_Data;
+    }
+  }
+
+  action(ee_sendDataToGetXRequestor, "ee", desc="Send data from cache to GetX ID") {
+    enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+      assert(is_valid(tbe));
+      assert(is_valid(cache_entry));
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:DATA;
+      out_msg.Sender := machineID;
+      out_msg.Destination.add(tbe.L1_GetX_ID);
+      DPRINTF(RubySlicc, "%s\n", out_msg.Destination);
+      out_msg.DataBlk := cache_entry.DataBlk;
+      DPRINTF(RubySlicc, "Address: %#x, Destination: %s, DataBlock: %s\n",
+              out_msg.addr, out_msg.Destination, out_msg.DataBlk);
+      out_msg.MessageSize := MessageSizeType:Response_Data;
+    }
+  }
+
+  action(f_sendInvToSharers, "f", desc="invalidate sharers for L2 replacement") {
+    enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+      assert(is_valid(cache_entry));
+      out_msg.addr := address;
+      out_msg.Type := CoherenceRequestType:INV;
+      out_msg.Requestor := machineID;
+      out_msg.Destination := cache_entry.Sharers;
+      out_msg.MessageSize := MessageSizeType:Request_Control;
+    }
+  }
+
+  action(fwm_sendFwdInvToSharersMinusRequestor, "fwm", desc="invalidate sharers for request, requestor is sharer") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceRequestType:INV;
+        out_msg.Requestor := in_msg.Requestor;
+        out_msg.Destination := cache_entry.Sharers;
+        out_msg.Destination.remove(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+      }
+    }
+  }
+
+  // OTHER ACTIONS
+  action(i_allocateTBE, "i", desc="Allocate TBE for request") {
+    check_allocate(TBEs);
+    assert(is_valid(cache_entry));
+    TBEs.allocate(address);
+    set_tbe(TBEs[address]);
+    tbe.L1_GetS_IDs.clear();
+    tbe.DataBlk := cache_entry.DataBlk;
+    tbe.Dirty := cache_entry.Dirty;
+    tbe.pendingAcks := cache_entry.Sharers.count();
+  }
+
+  action(s_deallocateTBE, "s", desc="Deallocate external TBE") {
+    TBEs.deallocate(address);
+    unset_tbe();
+  }
+
+  action(jj_popL1RequestQueue, "\j", desc="Pop incoming L1 request queue") {
+    Tick delay := L1RequestL2Network_in.dequeue(clockEdge());
+    profileMsgDelay(0, ticksToCycles(delay));
+  }
+
+  action(k_popUnblockQueue, "k", desc="Pop incoming unblock queue") {
+    Tick delay := L1unblockNetwork_in.dequeue(clockEdge());
+    profileMsgDelay(2, ticksToCycles(delay));
+  }
+
+  action(o_popIncomingResponseQueue, "o", desc="Pop Incoming Response queue") {
+    Tick delay := responseL2Network_in.dequeue(clockEdge());
+    profileMsgDelay(1, ticksToCycles(delay));
+  }
+
+  action(m_writeDataToCache, "m", desc="Write data from response queue to cache") {
+    peek(responseL2Network_in, ResponseMsg) {
+      assert(is_valid(cache_entry));
+      cache_entry.DataBlk := in_msg.DataBlk;
+      cache_entry.DataBlk_phy := in_msg.DataBlk;
+      if (in_msg.Dirty) {
+        cache_entry.Dirty := in_msg.Dirty;
+      }
+    }
+    DPRINTF(RubySlicc, "cache_entry.DataBlk: %s\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "cache_entry.DataBlk_phy: %s\n", cache_entry.DataBlk_phy);
+    DPRINTF(RubySlicc, "cache_entry.Dirty: %s\n", cache_entry.Dirty);
+  }
+
+  action(mr_writeDataToCacheFromRequest, "mr", desc="Write data from response queue to cache") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(cache_entry));
+      if (in_msg.Dirty) {
+        cache_entry.DataBlk := in_msg.DataBlk;
+        cache_entry.DataBlk_phy := in_msg.DataBlk;
+        cache_entry.Dirty := in_msg.Dirty;
+      }
+    }
+    DPRINTF(RubySlicc, "cache_entry.DataBlk: %s\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "cache_entry.DataBlk_phy: %s\n", cache_entry.DataBlk_phy);
+    DPRINTF(RubySlicc, "cache_entry.Dirty: %s\n", cache_entry.Dirty);
+  }
+
+  action(q_updateAck, "q", desc="update pending ack count") {
+    peek(responseL2Network_in, ResponseMsg) {
+      assert(is_valid(tbe));
+      tbe.pendingAcks := tbe.pendingAcks - in_msg.AckCount;
+      APPEND_TRANSITION_COMMENT(in_msg.AckCount);
+      APPEND_TRANSITION_COMMENT(" p: ");
+      APPEND_TRANSITION_COMMENT(tbe.pendingAcks);
+    }
+  }
+
+  action(qq_writeDataToTBE, "\qq", desc="Write data from response queue to TBE") {
+    peek(responseL2Network_in, ResponseMsg) {
+      assert(is_valid(tbe));
+      tbe.DataBlk := in_msg.DataBlk;
+      tbe.Dirty := in_msg.Dirty;
+    }
+  }
+
+  action(ss_recordGetSL1ID, "\s", desc="Record L1 GetS for load response") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(tbe));
+      tbe.L1_GetS_IDs.add(in_msg.Requestor);
+    }
+  }
+
+  action(xx_recordGetXL1ID, "\x", desc="Record L1 GetX for store response") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(tbe));
+      tbe.L1_GetX_ID := in_msg.Requestor;
+    }
+  }
+
+
+  action(set_tagMRU, "\setT", desc="set the MRU entry in tag") {
+    tag.setMRU(address);
+  }
+  action(set_dataMRU, "\setD", desc="set the MRU entry in data") {
+    data.setMRU(address);
+  }
+  action(set_dirMRU, "\setDir", desc="set the MRU entry in dir") {
+    dir.setMRU(address);
+  }
+  action(set1_tagMRU, "\setT1", desc="set the MRU entry in tag1") {
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+    tag.setMRU(primary_addr);
+  }
+  action(set1_dataMRU, "\setD1", desc="set the MRU entry in data1") {
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+    data.setMRU(primary_addr);
+  }
+  action(set1_dirMRU, "\setDir1", desc="set the MRU entry in dir1") {
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+    dir.setMRU(primary_addr);
+  }
+
+  // action(qqT_allocateL2CacheBlock_withTag, "qqt", desc="Set L2 cache tag equal to tag of block B.") {
+  //   if (is_invalid(cache_entry)) {
+  //     set_cache_entry(L2cache.allocate(address, new Entry));
+  //   }
+  //   tag.allocate(address, new Entry);
+  //   data.allocate(address, new Entry);
+  // }
+  action(qqDir_allocateL2CacheBlock_withDir, "qqdir", desc="Set L2 cache tag equal to tag of block B.") {
+    if (is_invalid(cache_entry)) {
+      set_cache_entry(L2cache.allocate(address, new Entry));
+    }
+    dir.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" dir++ l2++");
+  }
+  action(qqB_allocateL2CacheBlock_withBoth, "qqb", desc="Set L2 cache tag equal to tag of block B.") {
+    if (is_invalid(cache_entry)) {
+      set_cache_entry(L2cache.allocate(address, new Entry));
+    }
+    tag.allocate(address, new Entry);
+    data.allocate(address, new Entry);
+    dir.allocate(address, new Entry);
+    singularTag.allocate(address, new Entry);
+    singularTagShared.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" tag++ data++ dir++ l2++ st++ sts++");
+  }
+
+  action(aat_allocateTag, "aat", desc="allocate tag") {
+    tag.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" tag++");
+  }
+  action(aad_allocateData, "aad", desc="allocate tag") {
+    data.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" data++");
+  }
+  action(aadir_allocateDir, "aadir", desc="allocate dir") {
+    dir.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" dir++");
+  }
+
+  // allocate singular tag
+  action(aast_allocateSingularTag, "aast", desc="allocate singular tag") {
+    singularTag.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" st++");
+  }
+  
+  action(aasts_allocateSingularTagShared, "aasts", desc="allocate singular tag shared") {
+    singularTagShared.allocate(address, new Entry);
+    APPEND_TRANSITION_COMMENT(" sts++");
+  }
+
+  action(r_deallocateL2CacheBlock, "r", desc="Deallocate L2 cache block.  Sets the cache to not present, allowing a replacement in parallel with a fetch.") {
+    L2cache.deallocate(address);
+    unset_cache_entry();
+    APPEND_TRANSITION_COMMENT(" l2--");
+  }
+  action(rt_deallocateL2CacheBlockwithTagData, "rtd", desc="Deallocate L2 cache block.  Sets the cache to not present, allowing a replacement in parallel with a fetch.") {
+    L2cache.deallocate(address);
+    unset_cache_entry();
+    tag.deallocate(address);
+    data.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" tag-- data-- l2--");
+  }
+  action(rd_deallocateL2CacheBlockwithDir, "rd", desc="Deallocate L2 cache block.  Sets the cache to not present, allowing a replacement in parallel with a fetch.") {
+    L2cache.deallocate(address);
+    unset_cache_entry();
+    dir.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" dir-- l2--");
+  }
+  action(rb_deallocateL2CacheBlockwithBoth, "rb", desc="Deallocate L2 cache block.  Sets the cache to not present, allowing a replacement in parallel with a fetch.") {
+    L2cache.deallocate(address);
+    unset_cache_entry();
+    tag.deallocate(address);
+    data.deallocate(address);
+    dir.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" tag-- data-- dir-- l2--");
+  }
+
+  action(ddt_deallocateTag, "ddt", desc="Deallocate tag") {
+    tag.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" tag--");
+  }
+  action(ddd_deallocateData, "ddd", desc="Deallocate data") {
+    data.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" data--");
+  }
+  action(dddir_deallocateDir, "dddir", desc="Deallocate dir") {
+    dir.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" dir--");
+  }
+  action(ddl2_deallocateL2CacheBlock, "ddl2", desc="Deallocate l2 cache") {
+    L2cache.deallocate(address);
+    APPEND_TRANSITION_COMMENT(" l2--");
+  }
+
+  action(t_sendWBAck, "t", desc="Send writeback ACK") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:WB_ACK;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Control;
+      }
+    }
+  }
+  action(tn_sendWBNack, "tn", desc="Send writeback NACK") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:WB_NACK;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Control;
+      }
+    }
+  }
+  
+
+  action(ts_sendInvAckToUpgrader, "ts", desc="Send ACK to upgrader") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:ACK;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Control;
+        // upgrader doesn't get ack from itself, hence the + 1
+        out_msg.AckCount := 0 - cache_entry.Sharers.count() + 1;
+      }
+    }
+  }
+
+  action(uu_profileMiss, "\um", desc="Profile the demand miss") {
+    L2cache.profileDemandMiss();
+  }
+
+  action(uu_profileHit, "\uh", desc="Profile the demand hit") {
+    L2cache.profileDemandHit();
+  }
+
+  action(nn_addSharer, "\n", desc="Add L1 sharer to list") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(cache_entry));
+      addSharer(address, in_msg.Requestor, cache_entry);
+      APPEND_TRANSITION_COMMENT( cache_entry.Sharers );
+    }
+  }
+
+  action(nnu_addSharerFromUnblock, "\nu", desc="Add L1 sharer to list") {
+    peek(L1unblockNetwork_in, ResponseMsg) {
+      assert(is_valid(cache_entry));
+      addSharer(address, in_msg.Sender, cache_entry);
+    }
+  }
+
+  action(kk_removeRequestSharer, "\k", desc="Rm L1 Request sharer from list") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(cache_entry));
+      cache_entry.Sharers.remove(in_msg.Requestor);
+    }
+  }
+
+  action(ll_clearSharers, "\l", desc="Rm all L1 sharers from list") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(cache_entry));
+      cache_entry.Sharers.clear();
+      DPRINTF(RubySlicc, "sharers cleared for address: %#x\n", in_msg.addr);
+    }
+  }
+
+  action(l_removeSharer, "l", desc="Rm one sharer from list") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(cache_entry));
+      removeSharer(address, in_msg.Requestor, cache_entry);
+      APPEND_TRANSITION_COMMENT( cache_entry.Sharers );
+    }
+  }
+
+  action(mm_markExclusive, "\m", desc="set the exclusive owner") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(cache_entry));
+      cache_entry.Sharers.clear();
+      cache_entry.Exclusive := in_msg.Requestor;
+      addSharer(address, in_msg.Requestor, cache_entry);
+    }
+  }
+
+  action(mmu_markExclusiveFromUnblock, "\mu", desc="set the exclusive owner") {
+    peek(L1unblockNetwork_in, ResponseMsg) {
+      assert(is_valid(cache_entry));
+      cache_entry.Sharers.clear();
+      cache_entry.Exclusive := in_msg.Sender;
+      addSharer(address, in_msg.Sender, cache_entry);
+    }
+  }
+
+  action(zz_stallAndWaitL1RequestQueue, "zz", desc="recycle L1 request queue") {
+    stall_and_wait(L1RequestL2Network_in, address);
+  }
+
+  action(zn_recycleResponseNetwork, "zn", desc="recycle memory request") {
+    responseL2Network_in.recycle(clockEdge(), cyclesToTicks(recycle_latency));
+  }
+
+  action(kd_wakeUpDependents, "kd", desc="wake-up dependents") {
+    wakeUpBuffers(address);
+  }
+
+  include "MESI_Two_Level-L2cache-actions.sm";
+  //*****************************************************
+  // TRANSITIONS
+  //*****************************************************
+
+
+  //===============================================
+  // BASE STATE - I
+
+  // Transitions from I (Idle)
+  transition({NP, IS, IM, L2ONLY, M_I, I_I, S_I, MT_IB}, L1_PUTX) {
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition({SS}, L1_PUTX, L2ONLY) {
+    ddsts1_deallocateSTS;
+    dddir_deallocateDir;
+    t_sendWBAck;
+    l_removeSharer;
+    jj_popL1RequestQueue;
+  }
+  transition({SS, MT_IB}, L1_PUTX_not_last) {
+    t_sendWBAck;
+    l_removeSharer;
+    jj_popL1RequestQueue;
+  }
+  transition(MT_SB, L1_PUTX) {
+    t_sendWBAck;
+    l_removeSharer;
+    jj_popL1RequestQueue;
+  }
+
+  transition({NP, SS, L2ONLY, MT, M_I, I_I, S_I, IS, IM, MT_IB, MT_SB}, L1_PUTX_old) {
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+  transition({NP, SS, L2ONLY, MT, M_I, I_I, S_I, IS, IM, MT_IB}, L1_PUTS_old) {
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition({MT_SB}, L1_PUTS_old) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({MT_SB}, L1_PUTS_last) {
+    t_sendWBAck;
+    ll_clearSharers;
+    jj_popL1RequestQueue;
+  }
+
+  transition({IM, IS, SS_OR_MT_MB, MT_IIB, MT_IB, MT_SB}, {L2_Replacement, L2_Replacement_clean}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({IM, IS, SS_OR_MT_MB, MT_IIB, MT_IB, MT_SB}, MEM_Inv) {
+    zn_recycleResponseNetwork;
+  }
+
+  transition({I_I, S_I, M_I, MT_I, MCT_I, NP}, MEM_Inv) {
+    o_popIncomingResponseQueue;
+  }
+
+
+  transition({SS_OR_MT_MB, MT_IIB, MT_IB, MT_SB}, {L1_GETS, L1_GET_INSTR, L1_GETX, L1_UPGRADE}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+
+  transition(NP, L1_GETS,  IS) {
+    qqB_allocateL2CacheBlock_withBoth;
+    ll_clearSharers;
+    nn_addSharer;
+    i_allocateTBE;
+    ss_recordGetSL1ID;
+    a_issueFetchToMemory;
+    uu_profileMiss;
+    jj_popL1RequestQueue;
+  }
+
+  transition(NP, L1_GET_INSTR, IS) {
+    qqB_allocateL2CacheBlock_withBoth;
+    ll_clearSharers;
+    nn_addSharer;
+    i_allocateTBE;
+    ss_recordGetSL1ID;
+    a_issueFetchToMemory;
+    uu_profileMiss;
+    jj_popL1RequestQueue;
+  }
+
+  transition(NP, L1_GETX, IM) {
+    qqDir_allocateL2CacheBlock_withDir;
+    ll_clearSharers;
+    // nn_addSharer;
+    i_allocateTBE;
+    xx_recordGetXL1ID;
+    a_issueFetchToMemory;
+    uu_profileMiss;
+    jj_popL1RequestQueue;
+  }
+
+
+  // transitions from IS/IM
+  transition(IS, Mem_Data, SS) {
+    m_writeDataToCache;
+    e_sendDataToGetSRequestors;
+    s_deallocateTBE;
+    o_popIncomingResponseQueue;
+    kd_wakeUpDependents;
+  }
+
+  transition(IM, Mem_Data, SS_OR_MT_MB) {
+    m_writeDataToCache;
+    ee_sendDataToGetXRequestor;
+    s_deallocateTBE;
+    o_popIncomingResponseQueue;
+  }
+
+  transition({IS}, {L1_GETS, L1_GET_INSTR}, IS) {
+    nn_addSharer;
+    ss_recordGetSL1ID;
+    uu_profileMiss;
+    jj_popL1RequestQueue;
+  }
+
+  transition({IS}, L1_GETX) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition(IM, {L1_GETX, L1_GETS, L1_GET_INSTR}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // transitions from SS
+  transition(SS, {L1_GETS, L1_GET_INSTR}) {
+    ds_sendSharedDataToRequestor;
+    nn_addSharer;
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS, L1_GETX, SS_OR_MT_MB) {
+    ddt_deallocateTag;
+    ddd_deallocateData;
+    d_sendDataToRequestor;
+    ddststs_deallocateSTSTS;
+    fwm_sendFwdInvToSharersMinusRequestor;
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS, L1_UPGRADE, SS_OR_MT_MB) {
+    ddt_deallocateTag;
+    ddd_deallocateData;
+    ddststs_deallocateSTSTS;
+    fwm_sendFwdInvToSharersMinusRequestor;
+    ts_sendInvAckToUpgrader;
+    set_dirMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS, L2_Replacement_clean, I_I) {
+    i_allocateTBE;
+    f_sendInvToSharers;
+    rb_deallocateL2CacheBlockwithBoth;
+    ddststs_deallocateSTSTS;
+  }
+
+  transition(SS, {L2_Replacement, MEM_Inv}, S_I) {
+    i_allocateTBE;
+    f_sendInvToSharers;
+    rb_deallocateL2CacheBlockwithBoth;
+    ddststs_deallocateSTSTS;
+  }
+
+
+  transition(L2ONLY, {L1_GETS, L1_GET_INSTR}, SS) {
+    aadir_allocateDir;
+    aasts_allocateSingularTagShared;
+    ds_sendSharedDataToRequestor;
+    nn_addSharer;
+    set_tagMRU;
+    set_dataMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(L2ONLY, L1_GETX, SS_OR_MT_MB) {
+    aadir_allocateDir;
+    ddt_deallocateTag;
+    ddd_deallocateData;
+    ddst1_deallocateST;
+    d_sendDataToRequestor;
+    set_tagMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+
+  transition(L2ONLY, {L2_Replacement, MEM_Inv}, M_I) {
+    i_allocateTBE;
+    c_exclusiveReplacement;
+    rt_deallocateL2CacheBlockwithTagData;
+    ddst1_deallocateST;
+  }
+  transition(L2ONLY, L2_Replacement_clean, M_I) {
+    i_allocateTBE;
+    c_exclusiveCleanReplacement;
+    rt_deallocateL2CacheBlockwithTagData;
+    ddst1_deallocateST;
+  }
+
+
+  // transitions from MT
+
+  transition(MT, L1_GETX, SS_OR_MT_MB) {
+    b_forwardRequestToExclusive;
+    uu_profileMiss;
+    set_dirMRU;
+    jj_popL1RequestQueue;
+  }
+
+
+  transition(MT, {L1_GETS, L1_GET_INSTR}, MT_IIB) {
+    aat_allocateTag;
+    aad_allocateData;
+
+    b_forwardRequestToExclusive;
+    uu_profileMiss;
+    set_dirMRU;
+    jj_popL1RequestQueue;
+  }
+
+  transition(MT, {L2_Replacement, MEM_Inv}, MT_I) {
+    i_allocateTBE;
+    f_sendInvToSharers;
+    rd_deallocateL2CacheBlockwithDir;
+  }
+
+  transition(MT, L2_Replacement_clean, MCT_I) {
+    i_allocateTBE;
+    f_sendInvToSharers;
+    rd_deallocateL2CacheBlockwithDir;
+  }
+
+  transition(MT, L1_PUTX, L2ONLY) {
+    dddir_deallocateDir;
+    aat_allocateTag;
+    aad_allocateData;
+    aast_allocateSingularTag;
+    ll_clearSharers;
+    mr_writeDataToCacheFromRequest;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS, L1_PUTS_last, L2ONLY) {
+    ddsts1_deallocateSTS;
+    dddir_deallocateDir;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS, L1_PUTS_not_last, SS) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+  transition(SS_OR_MT_MB, Exclusive_Unblock, MT) {
+    // update actual directory
+    mmu_markExclusiveFromUnblock;
+    k_popUnblockQueue;
+    kd_wakeUpDependents;
+  }
+
+  transition(MT_IIB, {L1_PUTX, L1_PUTX_old, L1_PUTS_last, L1_PUTS_not_last, L1_PUTS_old}){
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition(MT_IIB, Unblock, MT_IB) {
+    nnu_addSharerFromUnblock;
+    k_popUnblockQueue;
+  }
+
+  transition(MT_IIB, {WB_Data, WB_Data_clean}, MT_SB) {
+    m_writeDataToCache;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(MT_IB, {WB_Data, WB_Data_clean}, SS) {
+    m_writeDataToCache;
+    aast_allocateSingularTag;
+    aasts_allocateSingularTagShared;
+    o_popIncomingResponseQueue;
+    kd_wakeUpDependents;
+  }
+
+  transition(MT_IB, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+  transition(MT_SB, Unblock, SS) {
+    nnu_addSharerFromUnblock;
+    aast_allocateSingularTag;
+    aasts_allocateSingularTagShared;
+    k_popUnblockQueue;
+    kd_wakeUpDependents;
+  }
+
+  // writeback states
+  transition({I_I, S_I, MT_I, MCT_I, M_I}, {L1_GETX, L1_UPGRADE, L1_GETS, L1_GET_INSTR}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition(I_I, Ack) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(I_I, Ack_all, M_I) {
+    c_exclusiveCleanReplacement;
+    o_popIncomingResponseQueue;
+  }
+
+  transition({MT_I, MCT_I}, WB_Data, M_I) {
+    qq_writeDataToTBE;
+    ct_exclusiveReplacementFromTBE;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(MCT_I, {WB_Data_clean, Ack_all}, M_I) {
+    c_exclusiveCleanReplacement;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(MCT_I,  {L1_PUTX, L1_PUTX_old,L1_PUTS_old}){
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // L1 never changed Dirty data
+  transition(MT_I, {WB_Data_clean, Ack_all}, M_I) {
+    ct_exclusiveReplacementFromTBE;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(MT_I, {L1_PUTX, L1_PUTX_old,L1_PUTS_old}){
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // possible race between unblock and immediate replacement
+  transition(SS_OR_MT_MB, {L1_PUTX, L1_PUTX_not_last, L1_PUTX_old, L1_PUTS_not_last, L1_PUTS_last, L1_PUTS_old}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition(S_I, Ack) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(S_I, Ack_all, M_I) {
+    ct_exclusiveReplacementFromTBE;
+    o_popIncomingResponseQueue;
+  }
+
+  transition(M_I, Mem_Ack, NP) {
+    s_deallocateTBE;
+    o_popIncomingResponseQueue;
+    kd_wakeUpDependents;
+  }
+
+  include "MESI_Two_Level-L2cache-transitions.sm";
+  include "MESI_Two_Level-L2cache-transitions-UB.sm";
+}

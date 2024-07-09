@@ -1,0 +1,49 @@
+Import('*')
+
+# Source('AddrVec.cc')
+
+if env['PROTOCOL'] == 'MESI_Two_Level_Compress':
+    SimObject('RubyCacheDecoupled.py', sim_objects=['RubyCacheDecoupled'])
+    SimObject('RubyCompressor.py', sim_objects=['RubyCompressor'])
+
+    DebugFlag('RubyCacheDecoupled')
+    DebugFlag('RubyCompressor')
+
+    Source('CacheMemoryDecoupled.cc')
+    Source('Compressor.cc')
+
+if env['PROTOCOL'] == 'MESI_Two_Level_Dedup':
+    SimObject('RubyCacheDecoupled.py', sim_objects=['RubyCacheDecoupled'])
+    SimObject('RubyCompressor.py', sim_objects=['RubyCompressor'])
+    SimObject('RubyCacheDecoupledMN.py', sim_objects=['RubyCacheDecoupledMN'])
+    SimObject('RubyDeduper.py', sim_objects=['RubyDeduper'])
+
+    DebugFlag('RubyCacheDecoupled')
+    DebugFlag('RubyCompressor')
+    DebugFlag('RubyCacheDecoupledMN')
+    DebugFlag('RubyDeduper')
+
+    Source('CacheMemoryDecoupled.cc')
+    Source('Compressor.cc')
+    Source('Deduper.cc')
+    Source('CacheMemoryDecoupledMN.cc')
+    Source('HashTableEntry.cc')
+
+
+if env['PROTOCOL'] == 'MESI_Two_Level_BDI_XOR':
+    SimObject('RubyCacheDecoupled.py', sim_objects=['RubyCacheDecoupled'])
+    SimObject('RubyCompressor.py', sim_objects=['RubyCompressor'])
+    SimObject('RubyCacheBDIXOR.py', sim_objects=['RubyCacheBDIXOR'])
+    SimObject('RubyXORer.py', sim_objects=['RubyXORer'])
+
+    DebugFlag('RubyCacheDecoupled')
+    DebugFlag('RubyCompressor')
+    DebugFlag('RubyXORer')
+    DebugFlag('RubyCacheBDIXOR')
+    DebugFlag('RubyCacheBDIXORSelection')
+    DebugFlag('RubyCacheBDIXORFwd')
+    
+    Source('CacheMemoryDecoupled.cc')
+    Source('Compressor.cc')
+    Source('XORer.cc')
+    Source('CacheMemoryBDIXOR.cc')

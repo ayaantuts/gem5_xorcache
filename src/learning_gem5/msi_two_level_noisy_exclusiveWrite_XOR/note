@@ -1,0 +1,16 @@
+DIR     0      0       1       1         0           1
+L2      0      1       0       1        diff        diff
+STATE   I   L2ONLY     M       S      L2ONLY_x      S_x
+
+
+============= - l2 funtions - =============
+cacheAvail(addr)
+cacheProbe(addr)
+setMRU(addr)
+allocate(addr, entry)
+deallocate(addr)
+
+============= - CHANGE LOG - =============
+1. remove events L2_Replacement_dir and L2_Replacement_clean_dir since they are essentially the same as L2_Replacement(_clean|)
+2. fix actions in remove_fromDir: previously to transfer coherence states infomation, we need to deallocate L2entry and then allocate it again to set;this is wrong because it changes last touch tick; now I just use lookup() to obtain AbstractCacheEntry to set it.
+3. 

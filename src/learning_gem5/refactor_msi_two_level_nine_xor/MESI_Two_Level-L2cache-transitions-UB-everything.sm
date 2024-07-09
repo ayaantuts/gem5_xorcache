@@ -1,0 +1,187 @@
+  // UB1
+  transition(SS_SS_UB1, {L1_GET_INSTR2_recon, L1_GETS2_recon}) {
+    ipu_incrementPendingUBs;
+    srs1_sendReconstructSToSharer;
+    nns_addSecondarySharer;
+    set_tagMRU;
+    set_dataMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, Unblock_not_all) {
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SS_UB1, Unblock, SS_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+  transition(SS_L2ONLY_UB1, Unblock, SS_L2ONLY) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+
+
+  // UB2
+  transition(SS_SS_UB2, {L1_GETS_recon, L1_GET_INSTR_recon}) {
+    ipu_incrementPendingUBs;
+    srs2_sendReconstructSToSharer2;
+    nn_addSharer;
+    set_tagMRU;
+    set_dataMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, Unblock_not_all2) {
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SS_UB2, Unblock2, SS_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+  transition(L2ONLY_SS_UB2, Unblock2, L2ONLY_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+ 
+// %%%%%%%%%%%%%%%%%%%%%% internal %%%%%%%%%%%%%%%%%%%%%%
+  // SS_SS_UB1
+  transition(SS_SS_UB1, L1_PUTS_last, L2ONLY_SS_UB1) {
+    dddir_deallocateDir;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(L2ONLY_SS_UB1, Unblock_not_all) {
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(L2ONLY_SS_UB1, Unblock, L2ONLY_SS) {
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+  }
+  
+  transition(SS_SS_UB1, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, L1_PUTS_last2, SS_L2ONLY_UB1) {
+    dddir_deallocateDir;
+    lls_clearSecondarySharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB1, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  
+  // SS_SS_UB2 //TODO
+  transition(SS_SS_UB2, L1_PUTS_last, L2ONLY_SS_UB2) {
+    dddir_deallocateDir;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, L1_PUTS_last2, SS_L2ONLY_UB2) {
+    dddir_deallocateDir;
+    lls_clearSecondarySharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SS_UB2, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  
+  // SS_L2ONLY_UB1
+  transition(SS_L2ONLY_UB1, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+// %%%%%%%%%%%%%%%%%%%%%% outof XOR %%%%%%%%%%%%%%%%%%%%%% 
+  //  ==== GETX ====
+
+  // SS_SS_UB1
+  transition(SS_SS_UB1, L1_GETX2_fwd, SS_SSMB_UB1_s) {
+    l2set1_ssmbub1s;
+    ddt_deallocateTag;
+
+    fwr2_sendFwdReqInvToSharers;
+    fwmn2_sendFwdInvToSharersMinusNewest;
+    set_dirMRU;
+    uu_profileHit;
+    jj_popL1RequestQueue;
+  }
+  transition(SS_SSMB_UB1_s, Unblock_not_all) {
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+  }
+  transition(SS_SSMB_UB1_s, Unblock, SS_SSMB_s) {//TODO: l2 state?
+    s_deallocateTBE;
+    k_popUnblockQueue;
+  }
+
+  transition(SS_SS_UB1, L1_GETX2_pb, SS_SSMB_UB1_s) {
+    l2set1_ssmbub1s;
+    ddt_deallocateTag;
+
+    d2pb1_sendData2ToRequestor_piggyback1;
+    fwm2_sendFwdInvToSharersMinusRequestor;
+
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+
+    jj_popL1RequestQueue;
+  }
+  
+// %%%%%%%%%%%%%%%%%%%%%% stalling %%%%%%%%%%%%%%%%%%%%%%
+  // repl
+  transition({SS_SS_UB1, SS_SS_UB2}, 
+    {L2_Replacement, L2_Replacement_clean, 
+    L2_Replacement2, L2_Replacement_clean2,
+    L2_Replacement_data_dirty_dirty, L2_Replacement_data_clean_clean,
+    L2_Replacement_data_clean_dirty, L2_Replacement_data_dirty_clean}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  // puts blocked
+  transition({SS_SS_UB1, SS_L2ONLY_UB1, L2ONLY_SS_UB1, SS_SSMB_UB1_s}, L1_PUTS_blocked) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({SS_SS_UB2, SS_L2ONLY_UB2, L2ONLY_SS_UB2}, L1_PUTS_blocked2) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // get
+  transition(SS_SS_UB1, {L1_GETX_pb, L1_GETX_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(SS_L2ONLY_UB1, {L1_GETX_pb, L1_GETX_fwd, L1_GETX2_recon}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(SS_SS_UB2, {L1_GETX2_pb, L1_GETX2_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }

@@ -1,0 +1,882 @@
+State getState1(Entry cache_entry, TBE tbe1, Addr addr1) {
+  if(is_valid(tbe1)) {
+    DPRINTF(RubySlicc, "getState1: addr1: %#x, tbe1.TBEState: %s\n", addr1, tbe1.TBEState);
+    return tbe1.TBEState;
+  } else if (is_valid(cache_entry)) {
+    if (L2cache.hasSecondaryAddr(addr1)) {
+      if ((cache_entry.CacheState == State:IS_L2ONLY) ||
+        (cache_entry.CacheState == State:IS_SS) ||
+        (cache_entry.CacheState == State:IS_IS)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: IS\n", addr1, cache_entry.CacheState);
+        return State:IS;
+      }
+      else if ((cache_entry.CacheState == State:L2ONLY_SS) ||
+        (cache_entry.CacheState == State:L2ONLY_IS) ||
+        (cache_entry.CacheState == State:L2ONLY_SS_s) ||
+        (cache_entry.CacheState == State:L2ONLY_SSMB_s) ||
+        (cache_entry.CacheState == State:L2ONLY_SS_r1) ||
+        (cache_entry.CacheState == State:L2ONLY_SI_dd) ||
+        (cache_entry.CacheState == State:L2ONLY_II_dc) ||
+        (cache_entry.CacheState == State:L2ONLY_SI_r2)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: L2ONLY\n", addr1, cache_entry.CacheState);
+        return State:L2ONLY;
+      }
+      else if ((cache_entry.CacheState == State:SS_SS) ||
+        (cache_entry.CacheState == State:SS_L2ONLY) ||
+        (cache_entry.CacheState == State:SS_IS) ||
+        (cache_entry.CacheState == State:SS_SSMB_s) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_r2) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_s) ||
+        (cache_entry.CacheState == State:SS_SI_r2) ||
+        (cache_entry.CacheState == State:SS_SS_UB1) ||
+        (cache_entry.CacheState == State:SS_SS_UB2) ||
+        (cache_entry.CacheState == State:SS_SS_UB12) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_UB1) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_UB2)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: SS\n", addr1, cache_entry.CacheState);
+        return State:SS;
+      }
+      else if ((cache_entry.CacheState == State:SI_L2ONLY_dd) ||
+        (cache_entry.CacheState == State:SI_L2ONLY_dc) ||
+        (cache_entry.CacheState == State:SI_SI_dd) ||
+        (cache_entry.CacheState == State:SI_MI_dd) ||
+        (cache_entry.CacheState == State:SI_MI_dc) ||
+        (cache_entry.CacheState == State:SI_II_dc) ||
+        (cache_entry.CacheState == State:SI_L2ONLY_r1) ||
+        (cache_entry.CacheState == State:SI_SS_r1)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: S_I\n", addr1, cache_entry.CacheState);
+        return State:S_I;
+      }
+      else if ((cache_entry.CacheState == State:II_L2ONLY_cd) ||
+        (cache_entry.CacheState == State:II_SI_cd) ||
+        (cache_entry.CacheState == State:II_MI_cd)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: I_I\n", addr1, cache_entry.CacheState);
+        return State:I_I;
+      }
+      else if ((cache_entry.CacheState == State:SSMB_SS_s) ||
+        (cache_entry.CacheState == State:SSMB_L2ONLY_s)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: SS_OR_MT_MB\n", addr1, cache_entry.CacheState);
+        return State:SS_OR_MT_MB;
+      }
+      else if ((cache_entry.CacheState == State:MTSB_L2ONLY)) {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: MT_SB\n", addr1, cache_entry.CacheState);
+        return State:MT_SB;
+      }
+      else {
+        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: ??\n", addr1, cache_entry.CacheState);
+        error("getState1: not implemented!");
+      }
+    } else {
+      DPRINTF(RubySlicc, "getState1: addr1: %#x, %s\n", addr1, cache_entry.CacheState);
+      return cache_entry.CacheState;
+    }
+  }
+  DPRINTF(RubySlicc, "getState1: addr1: %#x, NP\n", addr1);
+  return State:NP;
+}
+
+State getState2(Entry cache_entry, TBE tbe2, Addr addr2) {
+  if(is_valid(tbe2)) {
+    DPRINTF(RubySlicc, "getState2: addr2: %#x, tbe2.TBEState: %s\n", addr2, tbe2.TBEState);
+    return tbe2.TBEState;
+  } else if (is_valid(cache_entry)) {
+    if (L2cache.hasSecondaryAddr(addr2)) {
+      if ((cache_entry.CacheState == State:SS_IS) ||
+        (cache_entry.CacheState == State:L2ONLY_IS) ||
+        (cache_entry.CacheState == State:IS_IS)) {
+        DPRINTF(RubySlicc, "getState1: addr2: %#x, %s: IS\n", addr2, cache_entry.CacheState);
+        return State:IS;
+      }
+      else if ((cache_entry.CacheState == State:SS_L2ONLY) ||
+        (cache_entry.CacheState == State:IS_L2ONLY) ||
+        (cache_entry.CacheState == State:MTSB_L2ONLY) ||
+        (cache_entry.CacheState == State:SSMB_L2ONLY_s) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_r2) ||
+        (cache_entry.CacheState == State:II_L2ONLY_cd) ||
+        (cache_entry.CacheState == State:SI_L2ONLY_dd) ||
+        (cache_entry.CacheState == State:SI_L2ONLY_dc) ||
+        (cache_entry.CacheState == State:SI_L2ONLY_r1) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_UB1) ||
+        (cache_entry.CacheState == State:SS_L2ONLY_UB2)) {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: L2ONLY\n", addr2, cache_entry.CacheState);
+        return State:L2ONLY;
+      }
+      else if ((cache_entry.CacheState == State:SS_SS) ||
+        (cache_entry.CacheState == State:L2ONLY_SS) ||
+        (cache_entry.CacheState == State:IS_SS) ||
+        (cache_entry.CacheState == State:L2ONLY_SS_s) ||
+        (cache_entry.CacheState == State:SSMB_SS_s) ||
+        (cache_entry.CacheState == State:L2ONLY_SS_r1) ||
+        (cache_entry.CacheState == State:SI_SS_r1) ||
+        (cache_entry.CacheState == State:SS_SS_UB1) ||
+        (cache_entry.CacheState == State:SS_SS_UB2) ||
+        (cache_entry.CacheState == State:SS_SS_UB12) ||
+        (cache_entry.CacheState == State:L2ONLY_SS_UB1) ||
+        (cache_entry.CacheState == State:L2ONLY_SS_UB2)) {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: SS\n", addr2, cache_entry.CacheState);
+        return State:SS;
+      }
+      else if ((cache_entry.CacheState == State:L2ONLY_SI_dd) ||
+        (cache_entry.CacheState == State:SI_SI_dd) ||
+        (cache_entry.CacheState == State:II_SI_cd) ||
+        (cache_entry.CacheState == State:SS_SI_r2) ||
+        (cache_entry.CacheState == State:L2ONLY_SI_r2)) {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: S_I\n", addr2, cache_entry.CacheState);
+        return State:S_I;
+      }
+      else if ((cache_entry.CacheState == State:L2ONLY_II_dc) ||
+        (cache_entry.CacheState == State:SI_II_dc)) {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: I_I\n", addr2, cache_entry.CacheState);
+        return State:I_I;
+      }
+      else if ((cache_entry.CacheState == State:SI_MI_dd) ||
+        (cache_entry.CacheState == State:SI_MI_dc) ||
+        (cache_entry.CacheState == State:II_MI_cd)) {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: M_I\n", addr2, cache_entry.CacheState);
+        return State:M_I;
+      }
+      else if ((cache_entry.CacheState == State:SS_SSMB_s) ||
+        (cache_entry.CacheState == State:L2ONLY_SSMB_s)) {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: SS_OR_MT_MB\n", addr2, cache_entry.CacheState);
+        return State:SS_OR_MT_MB;
+      }
+      else {
+        DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: ??\n", addr2, cache_entry.CacheState);
+        error("getState1: not implemented!");
+      }
+    } else {
+      DPRINTF(RubySlicc, "getState2: addr2: %#x, %s\n", addr2, cache_entry.CacheState);
+      return cache_entry.CacheState;
+    }
+  }
+  DPRINTF(RubySlicc, "getState2: addr2: %#x, NP\n", addr2);
+  return State:NP;
+}
+
+
+in_port(L1RequestL2Network_in, RequestMsg, L1RequestToL2Cache, rank = 0) {
+  if(L1RequestL2Network_in.isReady(clockEdge())) {
+    peek(L1RequestL2Network_in,  RequestMsg) {
+      Entry cache_entry := getCacheEntry(in_msg.addr);
+      TBE tbe := TBEs[in_msg.addr];
+
+      DPRINTF(RubySlicc, "Addr: %#x State: %s Req: %s Type: %s Dest: %s\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination);
+
+      assert(machineIDToMachineType(in_msg.Requestor) == MachineType:L1Cache);
+      assert(in_msg.Destination.isElement(machineID));
+
+      Event toTrigger := L1Cache_request_type_to_event(in_msg.Type, in_msg.addr,
+                                              in_msg.Requestor, cache_entry, tbe);
+
+      bool is_secondary := L2cache.isSecondaryAddr(in_msg.addr);
+
+      // if (((!is_valid(cache_entry) || getState(tbe, cache_entry, in_msg.addr) == State:MT) && 
+      if ((toTrigger == Event:L1_PUTX && getState(tbe, cache_entry, in_msg.addr) == State:MT)) {
+        // LSH Computation
+        Addr lsh_addr := computeLSH(in_msg.DataBlk);
+        // check if we can do xor
+        // only shared cand can do xor
+        if (dmtShared.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold() && tag.cacheAvail(in_msg.addr)
+          && (dmtShared.hasRegisteredCandidate(in_msg.DataBlk) || ((!data.cacheAvail(in_msg.addr, block_size_in_bytes) || data.cacheFull())))
+           ) {
+          // Addr candidate := singularTagShared.candidateProbe(in_msg.addr);
+          Addr candidate := in_msg.addr;
+          if (dmtShared.hasRegisteredCandidate(in_msg.DataBlk)) {
+            candidate := dmtShared.getRandomRegisteredCandidate(in_msg.DataBlk);
+          } else {
+            candidate := dmtShared.getAnyRandomRegisteredCandidate();
+          }
+          Entry xor_candidate_cache_entry := getCacheEntry(candidate);
+          TBE xor_candidate_tbe := TBEs[candidate];
+
+          DataBlock newData := dataProc.peek_preproc(xor_candidate_cache_entry.DataBlk_phy, in_msg.DataBlk);
+          int comp_data_size_in_byte := dataProc.peek_compress_intra(newData);
+
+          DPRINTF(RubySlicc, "XOR CAND Addr: %#x State: %s\n",
+                  candidate, getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate));
+          
+          // only need to allocate tag and dir
+          if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) && data.cacheAvail(candidate, comp_data_size_in_byte)) {
+            L2cache.pair(candidate, in_msg.addr);
+            dmtShared.remove(candidate);
+            dmt.remove(candidate);
+            // singularTag.deallocate(candidate);
+            DPRINTF(RubySlicc, "L1RequestL2Network_in: ok xor paired, primary=0x%llx, secondary=0x%llx\n",
+              candidate, in_msg.addr);
+            Event toTrigger_xor := toTrigger_to_xor_event(toTrigger, getState(tbe, cache_entry, in_msg.addr));
+            trigger(toTrigger_xor, in_msg.addr, xor_candidate_cache_entry, xor_candidate_tbe);
+          }
+          else if (!tag.cacheAvail(in_msg.addr)) {
+            // No room in the L2, so we need to make room before handling the request
+            Addr victim := in_msg.addr;
+            if (tagNS.candidateCount(in_msg.addr) > 0) {
+              victim := tagNS.candidateProbe(in_msg.addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the tag (util=%f) NS\n", tag.getUtil());
+            } else {
+              victim := tag.cacheProbe(in_msg.addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the tag (util=%f)\n", tag.getUtil());
+            }
+            Entry L2cache_entry := getCacheEntry(victim);
+            if (L2cache.isSecondaryAddr(victim)) {
+              if (isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean2,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            } else {
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+          else if (!dir.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the dir (util=%f)\n", dir.getUtil());
+
+            // No room in the L2 dir, so we need to make room before handling the request
+            Addr victim := dir.cacheProbe(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            if (L2cache.isSecondaryAddr(victim)) {
+              if (isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean2,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            } else {
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+          else if (!data.cacheAvail(candidate, comp_data_size_in_byte)) { // need expansion
+
+            // No room in the L2 data, so we need to make room before handling the request
+            Addr victim := in_msg.addr;
+            if (dataNS.candidateCount(in_msg.addr) > 0) {
+              victim := dataNS.candidateProbe(in_msg.addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+            } else {
+              victim := data.candidateProbe(in_msg.addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+            }
+
+            Entry L2cache_entry := getCacheEntry(victim);
+            if (victim == candidate) {
+              DPRINTF(RubySlicc, "deadlock detected!\n");
+              error("selected myself as victim\n");
+            }
+            if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+              // Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+              // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+              if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+              } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+              } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+              } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+              }
+            } else {
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+        } else {
+            DPRINTF(RubySlicc, "candidate ct not enough: %d or tag.notavail (tag.avail=%d) or data.avial (data.avai=%d)\n", dmtShared.getAnyRegisteredCandidateCt(), 
+            tag.cacheAvail(in_msg.addr), data.cacheAvail(in_msg.addr, block_size_in_bytes));
+        }
+
+        if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) && baseCache.cacheAvail(lsh_addr)
+          && ((!dataProc.has_compression_scheme() && !dataProc.has_preproc_scheme()) || (is_secondary) || (data.cacheAvail(in_msg.addr, block_size_in_bytes)))) {
+          assert(L2cache.cacheAvail(in_msg.addr));
+          DPRINTF(RubySlicc, "L1RequestL2Network_in: ok\n");
+          if (baseCache.isTagPresent(lsh_addr)) {
+            trigger(Event:L1_PUTX_bcHit, in_msg.addr, cache_entry, tbe);
+          } else {
+            trigger(Event:L1_PUTX_bcMiss, in_msg.addr, cache_entry, tbe);
+          }
+        } 
+        // tag replacement has to 1) come before data replacement, OR 2) skip data replacement all together (this is what we do)
+        // otherwise there will be excessive replacement for baseline
+        else if ((dataProc.has_compression_scheme() || dataProc.has_preproc_scheme()) && (!is_secondary) && (!data.cacheAvail(in_msg.addr, block_size_in_bytes))) {
+
+          // No room in the L2 data, so we need to make room before handling the request
+          Addr victim := in_msg.addr;
+          if (dataNS.candidateCount(in_msg.addr) > 0) {
+            victim := dataNS.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+          } else {
+            victim := data.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+          }
+
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (victim == in_msg.addr) {// TODO: deadlock detected
+            DPRINTF(RubySlicc, "deadlock detected!\n");
+          }
+          DPRINTF(RubySlicc, "L1RequestL2Network_in: data array select 0x%llx as victim\n", victim);
+          
+          if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+            // evict both
+            if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        } 
+        else if (!tag.cacheAvail(in_msg.addr)) {
+          // No room in the L2, so we need to make room before handling the request
+          Addr victim := in_msg.addr;
+          if (tagNS.candidateCount(in_msg.addr) > 0) {
+            victim := tagNS.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the tag (util=%f) NS\n", tag.getUtil());
+          } else {
+            victim := tag.cacheProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the tag (util=%f)\n", tag.getUtil());
+          }
+
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (L2cache.isSecondaryAddr(victim)) {
+            if (isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean2,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        } 
+        else if (!dir.cacheAvail(in_msg.addr)) {
+          DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the dir (util=%f)\n", dir.getUtil());
+
+          // No room in the L2, so we need to make room before handling the request
+          Addr victim := dir.cacheProbe(in_msg.addr);
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (L2cache.isSecondaryAddr(victim)) {
+            if (isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean2,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        } 
+        else if (!baseCache.cacheAvail(lsh_addr)) {
+          DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the basecache (util=%f)\n", baseCache.getUtil());
+          error("L1_PUTX@MT, no room in the basecache\n");
+
+          // No room in the L2, so we need to make room before handling the request
+          Addr victim := baseCache.cacheProbe(lsh_addr);
+          Entry victim_basecache_entry := getBaseCacheEntry(victim);
+          Addr victim_addr_in_l2 := victim_basecache_entry.addr_cache;
+          Entry L2cache_entry := getCacheEntry(victim_addr_in_l2);
+          if (L2cache.isSecondaryAddr(victim)) {
+            if (isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean2,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        } 
+        
+        else {
+          error("L1RequestL2Network_in\n");
+        }
+      }
+      else if ((in_msg.Type == CoherenceRequestType:GETS || in_msg.Type == CoherenceRequestType:GET_INSTR)) {
+        //we cannot do xor until data comes back
+        if (is_valid(cache_entry)) {
+          Addr lsh_addr := computeLSH(cache_entry.DataBlk);
+          if (baseCache.isTagPresent(lsh_addr)) {
+            DPRINTF(RubySlicc, "L1RequestL2Network_in: basecache hit ok\n");
+          } else {
+            error("L1RequestL2Network_in: basecache miss\n");
+          }
+        }
+
+        if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) &&  (data.cacheAvail(in_msg.addr, block_size_in_bytes))) {
+          assert(L2cache.cacheAvail(in_msg.addr));
+          DPRINTF(RubySlicc, "L1RequestL2Network_in: ok\n");
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        } 
+        else if (!data.cacheAvail(in_msg.addr, block_size_in_bytes)) {
+          Addr victim := in_msg.addr;
+          if (dataNS.candidateCount(in_msg.addr) > 0) {
+            victim := dataNS.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+          } else {
+            victim := data.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+          }
+
+          // No room in the L2 data, so we need to make room before handling the request
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (victim == in_msg.addr) {// TODO: deadlock detected
+            DPRINTF(RubySlicc, "deadlock detected!\n");
+          }
+          if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+            // Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+            // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+            if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        }
+        else if (!tag.cacheAvail(in_msg.addr)) {
+          // No room in the L2, so we need to make room before handling the request
+          Addr victim := in_msg.addr;
+          if (tagNS.candidateCount(in_msg.addr) > 0) {
+            victim := tagNS.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the tag (util=%f) NS\n", tag.getUtil());
+          } else {
+            victim := tag.cacheProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the tag (util=%f)\n", tag.getUtil());
+          }
+
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (L2cache.isSecondaryAddr(victim)) {
+            if (isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean2,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        } 
+        else if (!dir.cacheAvail(in_msg.addr)) {
+          DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the dir (util=%f)\n", dir.getUtil());
+
+          // No room in the L2, so we need to make room before handling the request
+          Addr victim := dir.cacheProbe(in_msg.addr);
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (L2cache.hasSecondaryAddr(victim) || L2cache.isSecondaryAddr(victim)) {
+            // need to check data space for partner expansion
+            Addr partner_addr := victim;
+            if (L2cache.isSecondaryAddr(victim)) {
+              partner_addr := L2cache.getPrimaryAddr(victim);
+            } else {
+              partner_addr := L2cache.getSecondaryAddr(victim);
+            }
+            if (data.cacheAvail(partner_addr, block_size_in_bytes)) {
+              DPRINTF(RubySlicc, "L1RequestL2Network_in: partner expansion ok\n");
+            } else {
+              // No room in the L2 data, so we need to make room before handling the request
+              Addr victim := partner_addr;
+              if (dataNS.candidateCount(partner_addr) > 0) {
+                victim := dataNS.candidateProbe(partner_addr);
+                DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+              } else {
+                victim := data.candidateProbe(partner_addr);
+                DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+              }
+              Entry L2cache_entry := getCacheEntry(victim);
+              if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+                // Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+                // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+                if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+                } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+                } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+                } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+                }
+              } else {
+                if (isDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+                } 
+                else {
+                  trigger(Event:L2_Replacement_clean,
+                          victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+            }
+          }
+          if (L2cache.isSecondaryAddr(victim)) {
+            if (isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean2,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        } 
+        else {
+          error("L1RequestL2Network_in\n");
+        }
+      }
+      else if (in_msg.Type == CoherenceRequestType:GETX || in_msg.Type == CoherenceRequestType:UPGRADE) {
+        if (dir.cacheAvail(in_msg.addr)) {
+          assert(L2cache.cacheAvail(in_msg.addr));
+          // L2 does't have the line, but we have space for it in the L2
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        } else {
+          DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the dir (util=%f)\n", dir.getUtil());
+
+          // No room in the L2, so we need to make room before handling the request
+          Addr victim := dir.cacheProbe(in_msg.addr);
+          Entry L2cache_entry := getCacheEntry(victim);
+
+          if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+            Addr partner_addr := victim;
+            if (L2cache.isSecondaryAddr(victim)) {
+              partner_addr := L2cache.getPrimaryAddr(victim);
+            } else {
+              partner_addr := L2cache.getSecondaryAddr(victim);
+            }
+            //check data space for expansion
+            if (data.cacheAvail(partner_addr, block_size_in_bytes)) {
+              DPRINTF(RubySlicc, "L1RequestL2Network_in: partner expansion ok\n");
+            } else {
+              // No room in the L2 data, so we need to make room before handling the request
+              Addr victim := partner_addr;
+              if (dataNS.candidateCount(partner_addr) > 0) {
+                victim := dataNS.candidateProbe(partner_addr);
+                DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+              } else {
+                victim := data.candidateProbe(partner_addr);
+                DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+              }
+              Entry L2cache_entry := getCacheEntry(victim);
+              if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+                // Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+                // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+                if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+                } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+                } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+                } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+                }
+              } else {
+                if (isDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+                } 
+                else {
+                  trigger(Event:L2_Replacement_clean,
+                          victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+            }
+          }
+          if (L2cache.isSecondaryAddr(victim)) {
+            if (isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement2, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean2,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        }
+      }
+      else if (toTrigger == Event: L1_PUTS_last && (cache_entry.Sharers2.count() == 0)) {  //TODO: consider IS
+        // unpair
+        // make sure we have space in data for the secondary addr
+        if (L2cache.hasSecondaryAddr(in_msg.addr)) {
+          // Addr secondary_addr := L2cache.getSecondaryAddr(in_msg.addr);
+          // assert(data.isTagPresent(secondary_addr) == false); // transient states dont apply
+          if (data.cacheAvail(in_msg.addr, 2*block_size_in_bytes)) {
+            DPRINTF(RubySlicc, "unpair ok we have data space for both primary and secondary\n");
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else {
+
+            // No room in the L2 data, so we need to make room before handling the request
+            Addr victim := in_msg.addr;
+            if (dataNS.candidateCount(in_msg.addr) > 0) {
+              victim := dataNS.candidateProbe(in_msg.addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+            } else {
+              victim := data.candidateProbe(in_msg.addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+            }
+            // assert(victim != in_msg.addr); // TODO: deadlock detected
+            if (victim == in_msg.addr) {
+              DPRINTF(RubySlicc, "deadlock detected!\n");
+              error("selected myself as victim\n");
+            }
+            Entry L2cache_entry := getCacheEntry(victim);
+            if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+              // Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+              // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+              if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+              } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+              } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+              } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+              }
+            } else {
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+        } else {
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        }
+      }
+      else if (toTrigger == Event: L1_PUTS_last2 && (cache_entry.Sharers.count() == 0 || getState1(cache_entry, TBEs[in_msg.addr], in_msg.addr) == State:IS)) {
+        // unpair
+        // make sure we have space in data for the secondary addr (this)
+        Addr primary_addr := L2cache.getPrimaryAddr(in_msg.addr);
+
+        if (data.cacheAvail(primary_addr, 2*block_size_in_bytes)) {
+          DPRINTF(RubySlicc, "unpair ok we have data space for both primary and secondary\n");
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        } 
+        else if (!data.cacheAvail(primary_addr, 2*block_size_in_bytes)) {
+
+          // No room in the L2 data, so we need to make room before handling the request
+          Addr victim := primary_addr;
+          if (dataNS.candidateCount(primary_addr) > 0) {
+            victim := dataNS.candidateProbe(primary_addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+          } else {
+            victim := data.candidateProbe(primary_addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+          }
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+            Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+            // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+            DPRINTF(RubySlicc, "victim2 0x%llx\n",victim_secondary);
+            if (victim_secondary == primary_addr) {
+              DPRINTF(RubySlicc, "deadlock detected!\n");
+            }
+            if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        }
+        else {
+          assert(false);
+        }
+      }
+      else if (toTrigger == Event: L1_PUTX && cache_entry.Sharers2.count() == 0) {
+        // unpair
+        // make sure we have space in data for the secondary addr
+        if (L2cache.hasSecondaryAddr(in_msg.addr)) {
+          Addr secondary_addr := L2cache.getSecondaryAddr(in_msg.addr);
+          // assert(data.isTagPresent(secondary_addr) == false); // transient states dont apply
+          if (data.cacheAvail(secondary_addr, block_size_in_bytes)) {
+            DPRINTF(RubySlicc, "unpair ok we have data space\n");
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else {
+
+            // No room in the L2 data, so we need to make room before handling the request
+            Addr victim := secondary_addr;
+            if (dataNS.candidateCount(secondary_addr) > 0) {
+              victim := dataNS.candidateProbe(secondary_addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+            } else {
+              victim := data.candidateProbe(secondary_addr);
+              DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+            }
+            // assert(victim != in_msg.addr); // TODO: deadlock detected
+            if (victim == in_msg.addr) {
+              DPRINTF(RubySlicc, "deadlock detected!\n");
+            }
+            Entry L2cache_entry := getCacheEntry(victim);
+            if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+              // Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+              // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+              if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+              } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+              } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+              } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+              }
+            } else {
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } 
+              else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+        } else {
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        }
+      }
+      else if (toTrigger == Event: L1_PUTX2 && cache_entry.Sharers.count() == 0) {
+        // unpair
+        // make sure we have space in data for the secondary addr (this)
+        if (data.cacheAvail(in_msg.addr, block_size_in_bytes)) {
+          DPRINTF(RubySlicc, "unpair ok we have data space\n");
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        } else {
+
+          // No room in the L2 data, so we need to make room before handling the request
+          Addr victim := in_msg.addr;
+          if (dataNS.candidateCount(in_msg.addr) > 0) {
+            victim := dataNS.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f) NS\n", data.getUtilByte());
+          } else {
+            victim := data.candidateProbe(in_msg.addr);
+            DPRINTF(RubyReplacement, "L1RequestL2Network_in: No room in the data (util=%f)\n", data.getUtilByte());
+          }
+          Entry L2cache_entry := getCacheEntry(victim);
+          if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+            Addr victim_secondary := L2cache.getSecondaryAddr(victim);
+            // Entry L2cache_entry2 := getCacheEntry(victim_secondary);
+            DPRINTF(RubySlicc, "victim2 0x%llx\n",victim_secondary);
+            // assert(victim_secondary != in_msg.addr); // TODO: deadlock detected
+            if (victim_secondary == in_msg.addr) {
+              DPRINTF(RubySlicc, "deadlock detected!\n");
+            }
+            if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_clean, victim, L2cache_entry, TBEs[victim]);
+            } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_clean_dirty, victim, L2cache_entry, TBEs[victim]);
+            } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement_data_dirty_clean, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            if (isDirty(L2cache_entry)) {
+              trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+            } 
+            else {
+              trigger(Event:L2_Replacement_clean,
+                      victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        }
+      }
+      else {
+        DPRINTF(RubySlicc, "other case\n");
+        trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+      }
+    }
+  }
+}
+

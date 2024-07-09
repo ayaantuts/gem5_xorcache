@@ -1,0 +1,1588 @@
+
+//*****************************************************
+// TRANSITIONS
+//*****************************************************
+
+
+//===============================================
+
+// FROM SS
+
+// FROM S
+transition(S, {L1_GETS, L1_GET_INSTR}, SS) {
+  a2_checkXORCompressedAccess;
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(S_pair, {L1_GETS, L1_GET_INSTR}, SS_pair) {
+  ds_sendSharedDataToRequestor;
+//   ds_sendSharedDataToRequestor_special_ihavenosharer;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+
+transition(S, L1_GETX, SS_MB) {
+  a2_checkXORCompressedAccess;
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  check_nosharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(S_pair, L1_GETX, SS_MB_pair) {
+  ds_sendSharedDataToRequestor;
+  // ds_sendSharedDataToRequestor_special_ihavenosharer;
+  a1_profileXORCompressedAccess;
+  check_nosharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(S_br, L1_GETX, SS_MB_br) {
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  check_nosharer;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(S, Unblock, SS) {
+  nnu_addSharerFromUnblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+transition(S, Unblock_noAddSharer) {
+  // nnu_addSharerFromUnblock;
+  check_nosharer_from_unblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+
+transition(S, L2_Replacement_clean, M_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, L2_Replacement_clean, M_I) {
+  uu_profileReplacementTagArray;
+  s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition({S}, {L2_Replacement_clean_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition({S_pair}, {L2_Replacement_clean_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(S, {L2_Replacement}, M_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement}, M_I) {
+  uu_profileReplacementTagArray;
+  s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(S_pair, {L2_Replacement_xor_data}, M_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(S_pair, {L2_Replacement_xor_tag}, M_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+
+transition(S_pair, {L2_Replacement_xor_notRecoverable_M_PUTX}, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement_xor_notRecoverable_M_GET}, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement_xor_noSharer}, M_I) {
+  uu_profileReplacementXOR;
+  d7_xorType;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement_clean_xor_notRecoverable_M_PUTX}, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement_clean_xor_notRecoverable_M_GET}, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement_clean_xor_noSharer}, M_I) {
+  uu_profileReplacementXOR;
+  d7_xorType;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(S_pair, {L2_Replacement_clean_xor_tag}, M_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+transition({S_pair}, {L2_Replacement_clean_xor_data}, M_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+
+transition(S, {MEM_Inv}, M_I) {
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(S, {L2_Replacement_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(S_pair, {L2_Replacement_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+
+// BASE STATE - I
+
+// Transitions from I (Idle)
+
+
+
+
+
+transition({IM, IM_existing IS, ISS, IS_existing, ISS_existing, SS_MB, MT_MB, MT_IIB, MT_IB, MT_SB}, 
+  {L2_Replacement, L2_Replacement_clean}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({SS_MB_pair, MT_MB_pair, MT_SB_pair}, 
+  {L2_Replacement, L2_Replacement_clean}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition({MT_MB_pair,SS_MB_pair}, 
+  {L2_Replacement_clean_xor_notRecoverable_M_PUTX,L2_Replacement_xor_notRecoverable_M_PUTX,
+  L2_Replacement_clean_xor_notRecoverable_M_GET,L2_Replacement_xor_notRecoverable_M_GET,
+  L2_Replacement_clean_xor_noSharer, L2_Replacement_xor_noSharer}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({MT_MB_pair,SS_MB_pair}, 
+  {L2_Replacement_clean_xor_data,L2_Replacement_xor_data,L2_Replacement_clean_xor_tag,L2_Replacement_xor_tag}) {
+  zt_stallAndWaitTriggerQueue;
+}
+
+transition({IM_existing,IS_existing,ISS_existing}, 
+  {L2_Replacement_clean_xor_noSharer}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition({IM, IM_existing, IS, ISS, IS_existing, ISS_existing, SS_MB, MT_MB, MT_IIB, MT_IB, MT_SB}, 
+  {L2_Replacement_l1, L2_Replacement_clean_l1}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({SS_MB_pair, MT_MB_pair, MT_SB_pair}, 
+  {L2_Replacement_l1, L2_Replacement_clean_l1}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition({IM, IS, ISS, IS_existing, ISS_existing, IM_existing, SS_MB, MT_MB, MT_IIB, MT_IB, MT_SB}, MEM_Inv) {
+  zn_recycleResponseNetwork;
+}
+transition({SS_MB_pair, MT_MB_pair, MT_SB_pair}, MEM_Inv) {
+  zn_recycleResponseNetwork;
+}
+
+transition({I_I, S_I, M_I, MT_I, MCT_I, NP}, MEM_Inv) {
+  o_popIncomingResponseQueue;
+}
+
+
+transition({SS_MB, MT_MB, MT_IIB, MT_IB, MT_SB}, 
+  {L1_GETS, L1_GET_INSTR, L1_GETX, L1_UPGRADE}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({SS_MB_pair, MT_MB_pair, MT_SB_pair}, 
+  {L1_GETS, L1_GET_INSTR, L1_GETX, L1_UPGRADE}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition(NP, L1_GETS_writecache,  ISS) {
+  c1_profileFillNoXOR;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GETS_writecache_ngc,  ISS) {
+  c1_profileFillNoXOR;
+  c3_profileFillNoXOR_noGoodCandidate;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GETS_writecache_no_singular,  ISS) {
+  c1_profileFillNoXOR;
+  c4_profileFillNoXOR_noSingular;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(NP, L1_GETS_writecache_xor,  ISS_existing) {
+  c2_profileFillXOR;
+  qq_allocateL2CacheBlock;
+  xor_link;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GETS_writecache_xor_noPromotion,  IS_existing) {
+  c2_profileFillXOR;
+  qq_allocateL2CacheBlock;
+  xor_link;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(NP, L1_GET_INSTR_writecache, IS) {
+  c1_profileFillNoXOR;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GET_INSTR_writecache_ngc, IS) {
+  c1_profileFillNoXOR;
+  c3_profileFillNoXOR_noGoodCandidate;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GET_INSTR_writecache_no_singular, IS) {
+  c1_profileFillNoXOR;
+  c4_profileFillNoXOR_noSingular;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GET_INSTR_writecache_xor, IS_existing) {
+  c2_profileFillXOR;
+  qq_allocateL2CacheBlock;
+  xor_link;
+  ll_clearSharers;
+  nn_addSharer;
+  i_allocateTBE;
+  ss_recordGetSL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(NP, L1_GETX_writecache, IM) {
+  c1_profileFillNoXOR;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  // nn_addSharer;
+  i_allocateTBE;
+  xx_recordGetXL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GETX_writecache_ngc, IM) {
+  c1_profileFillNoXOR;
+  c3_profileFillNoXOR_noGoodCandidate;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  // nn_addSharer;
+  i_allocateTBE;
+  xx_recordGetXL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(NP, L1_GETX_writecache_no_singular, IM) {
+  c1_profileFillNoXOR;
+  c4_profileFillNoXOR_noSingular;
+  qq_allocateL2CacheBlock;
+  xor_link_new;
+  xor_lock;
+  ll_clearSharers;
+  // nn_addSharer;
+  i_allocateTBE;
+  xx_recordGetXL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(NP, L1_GETX_writecache_xor, IM_existing) {
+  c2_profileFillXOR;
+  qq_allocateL2CacheBlock;
+  xor_link;
+  ll_clearSharers;
+  // nn_addSharer;
+  i_allocateTBE;
+  xx_recordGetXL1ID;
+  a_issueFetchToMemory;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+// transitions from IS/IM
+
+transition(ISS, Mem_Data, MT_MB) {
+  m_writeDataToCache;
+  xor_unlock;
+  ex_sendExclusiveDataToGetSRequestors;
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+}
+transition(ISS_existing, Mem_Data, MT_MB_pair) {
+  m_writeDataToCache_xor;
+  remove_req_to_existing;
+  ex_sendExclusiveDataToGetSRequestors;
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+}
+
+transition(IS, Mem_Data, SS) {
+  m_writeDataToCache;
+  xor_unlock;
+  e_sendDataToGetSRequestors;
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+  kd_wakeUpAll;
+}
+transition(IS_existing, Mem_Data, SS_pair) {
+  m_writeDataToCache_xor;
+  remove_req_to_existing;
+  e_sendDataToGetSRequestors;
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+  kd_wakeUpAll;
+}
+
+transition(IM, Mem_Data, MT_MB) {
+  m_writeDataToCache;
+  xor_unlock; // i finish write now and can begin accepting xor
+  ee_sendDataToGetXRequestor;
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+}
+
+transition(IM_existing, Mem_Data, MT_MB_pair) {
+  m_writeDataToCache_xor;
+  remove_req_to_existing;
+  ee_sendDataToGetXRequestor;
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+}
+
+transition({IS, ISS}, {L1_GETS, L1_GET_INSTR}, IS) {
+  nn_addSharer;
+  ss_recordGetSL1ID;
+  uu_profileMiss;
+  a1_profileXORCompressedAccess;
+  a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition({IS_existing, ISS_existing}, {L1_GETS, L1_GET_INSTR}, IS_existing) {
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  ss_recordGetSL1ID;
+  uu_profileMiss;
+  jj_popL1RequestQueue;
+}
+
+transition({IS, ISS}, L1_GETX) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({IS_existing, ISS_existing}, L1_GETX) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+
+transition({IM,IM_existing}, {L1_GETX, L1_GETS, L1_GET_INSTR}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// transitions from SS
+transition(SS, {L1_GETS, L1_GET_INSTR}) {
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, {L1_GETS_toSharer, L1_GET_INSTR_toSharer}, SS_pair_putStall) {
+  // ds_sendSharedDataToRequestor;
+  ds_sendSharedDataToRequestor_special_ihavesharer;
+  a1_profileXORCompressedAccess;
+  // nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, {L1_GETS, L1_GET_INSTR}) {
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+
+transition(SS, L1_GETX, SS_MB) {
+  d_sendDataToRequestor;
+  a1_profileXORCompressedAccess;
+  // fw_sendFwdInvToSharers;
+  fwm_sendFwdInvToSharersMinusRequestor;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, L1_GETX_unxoring, SS_MB) {
+  a2_checkXORCompressedAccess;
+  d_sendDataToRequestor;
+  a1_profileXORCompressedAccess;
+  // fw_sendFwdInvToSharers;
+  fwm_sendFwdInvToSharersMinusRequestor;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, L1_GETX, SS_MB_pair) {
+  d_sendDataToRequestor;
+  a1_profileXORCompressedAccess;
+  // fw_sendFwdInvToSharers;
+  fwm_sendFwdInvToSharersMinusRequestor;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(SS_br, L1_GETX) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition(SS, L1_UPGRADE, SS_MB) {
+  a1_profileXORCompressedAccess;
+  fwm_sendFwdInvToSharersMinusRequestor;
+  ts_sendInvAckToUpgrader;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, L1_UPGRADE_unxoring, SS_MB) {
+  a2_checkXORCompressedAccess;
+  a1_profileXORCompressedAccess;
+  fwm_sendFwdInvToSharersMinusRequestor;
+  ts_sendInvAckToUpgrader;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(SS_pair, L1_UPGRADE, SS_MB_pair) {
+  a1_profileXORCompressedAccess;
+  fwm_sendFwdInvToSharersMinusRequestor;
+  ts_sendInvAckToUpgrader;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+
+transition(SS, L2_Replacement_clean, I_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(SS_pair, L2_Replacement_clean, I_I) {
+  uu_profileReplacementTagArray;
+  // s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  s3_schedulePartnerBlockHit_tag;
+  // f_sendInvToSharers;
+  f_sendInvToSharers_special;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+transition({SS}, {L2_Replacement_clean_l1}, I_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  s4_schedulePartnerBlockHit_data;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition({SS_pair}, {L2_Replacement_clean_l1}, I_I) {
+  uu_profileReplacementDataArray;
+  // s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  s4_schedulePartnerBlockHit_data;
+  // f_sendInvToSharers;
+  f_sendInvToSharers_special;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+transition(SS, {L2_Replacement}, S_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(SS_pair, {L2_Replacement}, S_I) {
+  uu_profileReplacementTagArray;
+  // s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  s3_schedulePartnerBlockHit_tag;
+  // f_sendInvToSharers;
+  f_sendInvToSharers_special;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(SS, {L2_Replacement_l1}, S_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(SS_pair, {L2_Replacement_l1}, S_I) {
+  uu_profileReplacementDataArray;
+  // s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  s4_schedulePartnerBlockHit_data;
+  // f_sendInvToSharers;
+  f_sendInvToSharers_special;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+transition(SS_pair, {L2_Replacement_xor_notRecoverable_M_PUTX}, S_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+transition(SS_pair, {L2_Replacement_xor_notRecoverable_M_GET}, S_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(SS_pair, {L2_Replacement_xor_tag}, S_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(SS_pair, {L2_Replacement_xor_data}, S_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(SS, {MEM_Inv}, S_I) {
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+
+
+
+transition(M, L1_GETX, MT_MB) {
+  a2_checkXORCompressedAccess;
+  a1_profileXORCompressedAccess;
+  d_sendDataToRequestor;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(M_pair, L1_GETX, MT_MB_pair) {
+  a1_profileXORCompressedAccess;
+  d_sendDataToRequestor;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(M, L1_GET_INSTR, SS) {
+  a2_checkXORCompressedAccess;
+  d_sendDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+transition(M_pair, L1_GET_INSTR, SS_pair) {
+  d_sendDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+transition(M, L1_GETS, MT_MB) {
+  a2_checkXORCompressedAccess;
+  dd_sendExclusiveDataToRequestor;
+  a1_profileXORCompressedAccess;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(M_pair, L1_GETS, MT_MB_pair) {
+  dd_sendExclusiveDataToRequestor;
+  a1_profileXORCompressedAccess;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+
+transition(M, {L2_Replacement}, M_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, {L2_Replacement}, M_I) {
+  uu_profileReplacementTagArray;
+  s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(M, L2_Replacement_clean, M_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, L2_Replacement_clean, M_I) {
+  uu_profileReplacementTagArray;
+  s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(M, {MEM_Inv}, M_I) {
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(M_pair, {L2_Replacement_xor_notRecoverable_M_PUTX}, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, {L2_Replacement_xor_notRecoverable_M_GET}, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, {L2_Replacement_xor_noSharer}, M_I) {
+  uu_profileReplacementXOR;
+  d7_xorType;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(M_pair, {L2_Replacement_xor_tag}, M_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(M_pair, {L2_Replacement_xor_data}, M_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(M, {L2_Replacement_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  // s2_schedulePartnerEviction_data;
+  // xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, {L2_Replacement_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+
+transition(M_pair, L2_Replacement_clean_xor_notRecoverable_M_PUTX, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, L2_Replacement_clean_xor_notRecoverable_M_GET, M_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, L2_Replacement_clean_xor_noSharer, M_I) {
+  uu_profileReplacementXOR;
+  d7_xorType;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(M_pair, L2_Replacement_clean_xor_tag, M_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(M_pair, L2_Replacement_clean_xor_data, M_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition({M}, {L2_Replacement_clean_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition({M_pair}, {L2_Replacement_clean_l1}, M_I) {
+  uu_profileReplacementDataArray;
+  s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  c_exclusiveCleanReplacement;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+// transitions from MT
+
+transition(MT, L1_GETX, MT_MB) {
+  b_forwardRequestToExclusive;
+  uu_profileMiss;
+  uu_profileMiss_coherence;
+  set_setMRU;
+  jj_popL1RequestQueue;
+}
+transition(MT_pair, L1_GETX, MT_MB_pair) {
+  b_forwardRequestToExclusive;
+  uu_profileMiss;
+  uu_profileMiss_coherence;
+  set_setMRU;
+  jj_popL1RequestQueue;
+}
+transition(MT_br, L1_GETX, MT_MB_br) {
+  b_forwardRequestToExclusive;
+  uu_profileMiss;
+  uu_profileMiss_coherence;
+  set_setMRU;
+  jj_popL1RequestQueue;
+}
+
+
+transition(MT, {L1_GETS_writecache, L1_GET_INSTR_writecache}, MT_IIB) {
+  a2_checkXORCompressedAccess;
+  xor_lock;
+  xor_overprovision;
+  b_forwardRequestToExclusive;
+  uu_profileMiss;
+  uu_profileMiss_coherence;
+  set_setMRU;
+  jj_popL1RequestQueue;
+}
+transition(MT_pair, {L1_GETS_writecache, L1_GET_INSTR_writecache}, MT_IIB) {
+  a2_checkXORCompressedAccess;
+  // xor_lock;
+  xor_overprovision;
+  b_forwardRequestToExclusive;
+  uu_profileMiss;
+  uu_profileMiss_coherence;
+  set_setMRU;
+  jj_popL1RequestQueue;
+}
+
+transition(MT, {L2_Replacement}, MT_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(MT_pair, {L2_Replacement}, MT_I) {
+  uu_profileReplacementTagArray;
+  s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(MT_pair, {L2_Replacement_xor_noSharer}, MT_I) {
+  uu_profileReplacementXOR;
+  d7_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(MT, {MEM_Inv}, MT_I) {
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(MT, {L2_Replacement_l1}, MT_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(MT_pair, {L2_Replacement_l1}, MT_I) {
+  uu_profileReplacementDataArray;
+  s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+transition(MT, L2_Replacement_clean, MCT_I) {
+  uu_profileReplacementTagArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition(MT_pair, L2_Replacement_clean, MCT_I) {
+  uu_profileReplacementTagArray;
+  s1_schedulePartnerEviction_tag;
+  xor_lock_parner;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+transition({MT_pair}, {L2_Replacement_clean_xor_noSharer}, MCT_I) {
+  uu_profileReplacementXOR;
+  d7_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+transition({MT}, {L2_Replacement_clean_l1}, MCT_I) {
+  uu_profileReplacementDataArray;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+transition({MT_pair}, {L2_Replacement_clean_l1}, MCT_I) {
+  uu_profileReplacementDataArray;
+  s2_schedulePartnerEviction_data;
+  xor_lock_parner;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  xor_unlock_conditional;
+  rr_deallocateL2CacheBlock;
+}
+
+
+
+transition(MT_pair, {L2_Replacement_clean_xor_notRecoverable_M_PUTX}, MCT_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+transition(MT_pair, {L2_Replacement_clean_xor_notRecoverable_M_GET}, MCT_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+
+transition({MT_pair}, {L2_Replacement_clean_xor_tag}, MCT_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition({MT_pair}, {L2_Replacement_clean_xor_data}, MCT_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+
+transition(MT_pair, {L2_Replacement_xor_notRecoverable_M_PUTX}, MT_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+transition(MT_pair, {L2_Replacement_xor_notRecoverable_M_GET}, MT_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+
+transition(MT_pair, {L2_Replacement_xor_tag}, MT_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(MT_pair, {L2_Replacement_xor_data}, MT_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition(MT, L1_PUTX_writecache, M) {
+  ll_clearSharers;
+  mr_writeDataToCacheFromRequest;
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+transition(MT_pair, L1_PUTX_writecache, M_pair) {
+  ll_clearSharers;
+  mr_writeDataToCacheFromRequest;
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+transition(MT_pair, {L1_PUTX_writecache_unxoring_notRecoverable,L1_PUTX_writecache_unxoring_noSharer}, M) {
+  xor_unlock;
+  ll_clearSharers;
+  mr_writeDataToCacheFromRequest;
+  t_sendWBAck;
+  jj_popL1RequestQueue;
+}
+
+transition({SS_MB,MT_MB}, Exclusive_Unblock, MT) {
+  // update actual directory
+  mmu_markExclusiveFromUnblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+transition({SS_MB_pair,MT_MB_pair}, Exclusive_Unblock, MT_pair) {
+  // update actual directory
+  mmu_markExclusiveFromUnblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+
+transition({SS_MB_br}, Exclusive_Unblock, MT_br) {
+  // update actual directory
+  mmu_markExclusiveFromUnblock;
+  k_popUnblockQueue;
+  // kd_wakeUpAll;
+}
+
+transition(MT_MB_br, Exclusive_Unblock, MT_br) {
+  // update actual directory
+  mmu_markExclusiveFromUnblock;
+  k_popUnblockQueue;
+  // kd_wakeUpAll; // not in stable state yet
+}
+
+
+
+transition({MT_IIB}, Unblock, MT_IB) {
+  nnu_addSharerFromUnblock;
+  k_popUnblockQueue;
+}
+transition({MT_IIB}, Unblock_noAddSharer, MT_IB) {
+  // nnu_addSharerFromUnblock;
+  k_popUnblockQueue;
+}
+
+transition({MT_IIB}, {WB_Data, WB_Data_clean}, MT_SB) {
+  mul_writeDataToCacheUpdateLink;
+  xor_unlock; // wb is done, now accepting xor
+  o_popIncomingResponseQueue;
+}
+
+
+transition(MT_IB, {WB_Data, WB_Data_clean}, SS) {
+  mul_writeDataToCacheUpdateLink;
+  xor_unlock; // wb is done, now accepting xor
+  o_popIncomingResponseQueue;
+  kd_wakeUpAll;
+}
+
+transition(MT_SB, Unblock, SS) {
+  nnu_addSharerFromUnblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+transition(MT_SB, Unblock_noAddSharer, SS) {
+  // nnu_addSharerFromUnblock;
+  check_sharer_exist_from_unblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+
+// writeback states
+transition({I_I, S_I, MT_I, MCT_I, M_I}, {L1_GETX, L1_UPGRADE, L1_GETS, L1_GET_INSTR}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition(I_I, Ack) {
+  q_updateAck;
+  o_popIncomingResponseQueue;
+}
+transition(I_I, AckData) {
+  t1_try_go_out_of_blockhit_partner;
+  q_updateAck;
+  o_popIncomingResponseQueue;
+}
+
+transition(I_I, Ack_all, M_I) {
+  c_exclusiveCleanReplacement;
+  o_popIncomingResponseQueue;
+}
+transition(I_I, AckData_all, M_I) {
+  t1_try_go_out_of_blockhit_partner;
+  c_exclusiveCleanReplacement;
+  o_popIncomingResponseQueue;
+}
+
+transition({MT_I, MCT_I}, WB_Data, M_I) {
+  qq_writeDataToTBE;
+  ct_exclusiveReplacementFromTBE;
+  o_popIncomingResponseQueue;
+}
+
+transition(MCT_I, {WB_Data_clean, Ack_all}, M_I) {
+  c_exclusiveCleanReplacement;
+  o_popIncomingResponseQueue;
+}
+
+// L1 never changed Dirty data
+transition(MT_I, {WB_Data_clean, Ack_all}, M_I) {
+  ct_exclusiveReplacementFromTBE;
+  o_popIncomingResponseQueue;
+}
+
+transition(S_I, Ack) {
+  q_updateAck;
+  o_popIncomingResponseQueue;
+}
+transition(S_I, AckData) {
+  t1_try_go_out_of_blockhit_partner;
+  q_updateAck;
+  o_popIncomingResponseQueue;
+}
+
+transition(S_I, Ack_all, M_I) {
+  ct_exclusiveReplacementFromTBE;
+  o_popIncomingResponseQueue;
+}
+transition(S_I, AckData_all, M_I) {
+  t1_try_go_out_of_blockhit_partner;
+  ct_exclusiveReplacementFromTBE;
+  o_popIncomingResponseQueue;
+}
+
+transition(M_I, Mem_Ack, NP) {
+  s_deallocateTBE;
+  o_popIncomingResponseQueue;
+  kd_wakeUpAll;
+}
+
+// ==== block_repl ====
+transition(MT, Block_Repl, MT_br) {
+  xor_lock;
+  validate_link_tag;
+}
+transition(SS, Block_Repl, SS_br) {
+  xor_lock;
+  validate_link_tag;
+}
+transition(S, Block_Repl, S_br) {
+  xor_lock;
+  validate_link_tag;
+}
+transition(M, Block_Repl, M_br) {
+  xor_lock;
+  validate_link_tag;
+}
+transition(SS_MB, Block_Repl, SS_MB_br) {
+  xor_lock;
+  validate_link_tag;
+}
+
+transition(MT_MB, Block_Repl, MT_MB_br) {
+  xor_lock;
+  validate_link_tag;
+}
+transition(MT_SB, Block_Repl, MT_SB_br) {
+  xor_lock;
+  validate_link_tag;
+}
+transition(MT_IIB, Block_Repl) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// ==== l2 replacement ====
+transition({SS_br,MT_SB_br,S_br,M_br,MT_MB_br,MT_br,SS_MB_br}, {L2_Replacement_clean,L2_Replacement,L2_Replacement_clean_l1,L2_Replacement_l1}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({SS_br,MT_SB_br,S_br,M_br,MT_MB_br,MT_br,SS_MB_br}, {MEM_Inv}) {
+  zn_recycleResponseNetwork;
+}
+
+transition(SS_pair, L2_Replacement_clean_xor_notRecoverable_M_PUTX, I_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d5_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+transition(SS_pair, L2_Replacement_clean_xor_notRecoverable_M_GET, I_I) {
+  xor_lock_parner;
+  uu_profileReplacementXOR;
+  d6_xorType;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+}
+transition({SS_pair}, L2_Replacement_clean_xor_tag, I_I) {
+  uu_profileReplacementXOR;
+  d3_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+transition({SS_pair}, L2_Replacement_clean_xor_data, I_I) {
+  uu_profileReplacementXOR;
+  d4_xorType;
+  xor_unlock;
+  i_allocateTBE;
+  f_sendInvToSharers;
+  rr_deallocateL2CacheBlock;
+  p_popTriggerQueue;
+}
+
+
+// ==== put/get ====
+
+
+
+transition(M_br, {L1_GETX,L1_GETS}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition(M_br, L1_GET_INSTR, SS_br) {
+  d_sendDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  // a2_checkXORCompressedAccess;
+  jj_popL1RequestQueue;
+}
+
+
+transition({MT_MB_br}, {L1_GETS,L1_GET_INSTR, L1_GETX, L1_UPGRADE}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition(MT_br, {L1_GETS,L1_GET_INSTR}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition(SS_MB_br, {L1_GETX, L1_GET_INSTR, L1_GETS}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+
+
+transition({SS_MB_br}, {L1_UPGRADE}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+transition(SS_br, {L1_GETS, L1_GET_INSTR}) {
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(S_br, {L1_GETS, L1_GET_INSTR},SS_br) {
+  ds_sendSharedDataToRequestor;
+  a1_profileXORCompressedAccess;
+  nn_addSharer;
+  set_setMRU;
+  uu_profileHit;
+  jj_popL1RequestQueue;
+}
+transition(SS_br, L1_UPGRADE) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+
+
+transition(MT_SB_br, Unblock, SS_br) {
+  nnu_addSharerFromUnblock;
+  k_popUnblockQueue;
+  // kd_wakeUpAll;
+}
+transition(MT_SB_br, Unblock_noAddSharer, SS_br) {
+  // nnu_addSharerFromUnblock;
+  check_sharer_exist_from_unblock;
+  k_popUnblockQueue;
+  // kd_wakeUpAll;
+}
+
+transition({MT_SB_br}, {L1_GETS, L1_GET_INSTR, L1_GETX, L1_UPGRADE}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+
+
+
+// ===== Unblock_Repl =====
+transition(SS_br, Unblock_Repl, SS_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+  kd_wakeUpAll;
+}
+transition(MT_MB_br, Unblock_Repl, MT_MB_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+  // kd_wakeUpAll;
+}
+transition(SS_MB_br, Unblock_Repl, SS_MB_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+  // kd_wakeUpAll;
+}
+transition(S_br, Unblock_Repl, S_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+  kd_wakeUpAll;
+}
+transition(M_br, Unblock_Repl, M_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+  kd_wakeUpAll;
+}
+transition(MT_br, Unblock_Repl, MT_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+  kd_wakeUpAll;
+}
+
+transition(MT_SB_br, Unblock_Repl, MT_SB_pair) {
+  xor_unlock;
+  remove_existing_to_req_link;
+}
+
+// unstall put
+transition(SS_pair_putStall, {Unstall_Put}, SS_pair) {
+  nnu_addSharerFromUnblock;
+  k_popUnblockQueue;
+  kd_wakeUpAll;
+}
+transition(SS_pair_putStall, {L2_Replacement_xor_tag,L2_Replacement_clean_xor_tag}) {
+  zt_stallAndWaitTriggerQueue;
+}
+transition(SS_pair_putStall, {L1_GETX, L1_GETS, L1_GET_INSTR, L1_UPGRADE, 
+L2_Replacement_clean_xor_notRecoverable_M_GET,L2_Replacement_xor_notRecoverable_M_GET,
+L2_Replacement_clean_xor_notRecoverable_M_PUTX,L2_Replacement_xor_notRecoverable_M_PUTX,
+}) {
+  zz_stallAndWaitL1RequestQueue;
+}

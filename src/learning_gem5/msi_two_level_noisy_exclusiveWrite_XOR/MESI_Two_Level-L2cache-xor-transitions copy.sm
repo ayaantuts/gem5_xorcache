@@ -1,0 +1,115 @@
+// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% INTO XOR STATES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+// ======= proactive transition to XOR states (green 1) =======
+transition(NP, {L1_GETS_XOR, L1_GET_INSTR_XOR},  IS_x) {
+    qq_allocateDirCacheBlock;
+    bb_allocateL2CacheTagandLinkData;
+    set_setXORed;
+    s_schedulePairing;
+    ll_clearSharers;
+    nn_addSharer;
+    i_allocateTBE;
+    ss_recordGetSL1ID;
+    a_issueFetchToMemory;
+    uu_profileMiss_dir;
+    uu_profileMiss;
+    jj_popL1RequestQueue;
+}
+transition(IS_x, Mem_Data, SS_x) {
+    pp_procWriteDataToCache;
+    qq_writeDataToTBE;
+    et_sendDataToGetSRequestors_fromTBE; // bypassing the mem data (raw)
+    s_deallocateTBE;
+    o_popIncomingResponseQueue;
+    kd_wakeUpDependents;
+}
+
+// ======= reactive transition to XOR states (green 2) =======
+transition(SS, GO_TO_XOR, SS_x) {
+    set_setXORed;
+    p_popTriggerQueue;
+}
+transition(L2ONLYS, GO_TO_XOR, L2ONLYS_x) {
+    set_setXORed;
+    p_popTriggerQueue;
+}
+
+
+// ======= internal transition =======
+// transition(SS_x, {L1_GETS_piggyback, L1_GET_INSTR_piggyback}) {
+//     ds_sendSharedDataToRequestor;
+//     nn_addSharer;
+//     set_setMRU_dir;
+//     set_setMRU;
+//     uu_profileHit_dir;
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+// }
+
+
+// %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% OUT OF XOR STATES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+transition(SS_x, GO_OUT_OF_XOR, SS) {
+    clear_clearXORed;
+    p_popTriggerQueue;
+}
+transition(L2ONLYS_x, GO_OUT_OF_XOR, L2ONLYS) {
+    clear_clearXORed;
+    p_popTriggerQueue;
+}
+
+
+transition(SS_x, L2_RmFromDir) {
+    remove_fromDir;
+}
+transition(SS_x, L1_PUTS_last_expand, SS_x_SINK) {
+    i_allocateTBE;
+    ul_unlink;
+    lk_linkToNewData;
+    // t_sendWBAck; //hold on to wback yet
+    tn_sendSpecialWBNack; // send a special WB req to the last sharer
+    jj_popL1RequestQueue;
+}
+transition(SS_x_SINK, L1_PUTS_DATA_last, L2ONLYS) {
+    s_deallocateTBE;
+    mr_writeDataToCacheFromRequest; // write wb data to this cache
+    ppp_procWriteDataToPartnerCache_req; // write recovered data to partner cache
+
+    su_scheduleUnpairing;
+    rm_partner_map;
+    clear_clearXORed;
+
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+    kd_wakeUpDependents;
+}
+
+transition(SS_x, L1_PUTS_last, L2ONLYS_x) {
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+}
+
+
+transition(L2ONLYS_x, L2_Replacement_clean, M_I_x) {
+    i_allocateTBE;
+    a_issueFetchXORToMemory;
+    clear_clearXORed;
+    rr_deallocateL2CacheBlock;
+}
+transition(M_I_x, Mem_Data_XOR, NP) {
+    ppp_procWriteDataToPartnerCache; // this cache entry is invalid now
+
+    su_scheduleUnpairing;
+    rm_partner_map;
+
+    s_deallocateTBE;
+    o_popIncomingResponseQueue;
+    kd_wakeUpDependents;
+}
+
+// transition(L2ONLYS_x, {L2_Replacement, MEM_Inv}, MD_I_x) {
+//     i_allocateTBE;
+//     // c_exclusiveReplacement;
+
+//     rr_deallocateL2CacheBlock; //TODO
+// }

@@ -1,0 +1,101 @@
+// state transitions related to block hit
+// M
+transition(M_pair, {go_to_blockhit_data,go_to_blockhit_tag}, M_blockhit) {
+  i_allocateTBE;
+  p_popTriggerQueue;
+}
+transition(M_blockhit, go_out_of_blockhit, M) {
+  xor_unlock;
+  s_deallocateTBE;
+  p_popTriggerQueue;
+  kd_wakeUpAll;
+}
+
+// MT
+transition(MT_pair, {go_to_blockhit_data,go_to_blockhit_tag}, MT_blockhit) {
+  i_allocateTBE;
+  p_popTriggerQueue;
+}
+transition(MT_blockhit, go_out_of_blockhit, MT) {
+  xor_unlock;
+  s_deallocateTBE;
+  p_popTriggerQueue;
+  kd_wakeUpAll;
+}
+ 
+// SS
+transition(SS_pair, {go_to_blockhit_data,go_to_blockhit_tag}, SS_blockhit) {
+  i_allocateTBE;
+  p_popTriggerQueue;
+}
+transition(SS_blockhit, go_out_of_blockhit, SS) {
+  xor_unlock;
+  s_deallocateTBE;
+  p_popTriggerQueue;
+  kd_wakeUpAll;
+} 
+
+// MT_MB
+transition(MT_MB_pair, {go_to_blockhit_data,go_to_blockhit_tag}, MT_MB_blockhit) {
+  i_allocateTBE;
+  p_popTriggerQueue;
+}
+transition(MT_MB_blockhit, go_out_of_blockhit, MT_MB) {
+  xor_unlock;
+  s_deallocateTBE;
+  p_popTriggerQueue;
+  kd_wakeUpAll;
+}
+transition(MT_MB_blockhit, Exclusive_Unblock, MT_blockhit) {
+  mmu_markExclusiveFromUnblock;
+  k_popUnblockQueue;
+}
+
+// S
+transition(S_pair, {go_to_blockhit_data,go_to_blockhit_tag}, S_blockhit) {
+  i_allocateTBE;
+  p_popTriggerQueue;
+}
+transition(S_blockhit, go_out_of_blockhit, S) {
+  xor_unlock;
+  s_deallocateTBE;
+  p_popTriggerQueue;
+  kd_wakeUpAll;
+} 
+
+// SS_MB
+transition(SS_MB_pair, {go_to_blockhit_data,go_to_blockhit_tag}, SS_MB_blockhit) {
+  i_allocateTBE;
+  p_popTriggerQueue;
+}
+transition(SS_MB_blockhit, go_out_of_blockhit, SS_MB) {
+  xor_unlock;
+  s_deallocateTBE;
+  p_popTriggerQueue;
+  kd_wakeUpAll;
+} 
+transition(SS_MB_blockhit, Exclusive_Unblock, MT_blockhit) {
+  mmu_markExclusiveFromUnblock;
+  k_popUnblockQueue;
+}
+
+
+transition({M_blockhit, MT_blockhit, SS_blockhit, MT_MB_blockhit,S_blockhit,SS_MB_blockhit}, 
+  {L2_Replacement_clean, L2_Replacement_clean_l1,L2_Replacement, L2_Replacement_l1}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({M_blockhit, MT_blockhit, SS_blockhit, MT_MB_blockhit,S_blockhit,SS_MB_blockhit}, MEM_Inv) {
+  zn_recycleResponseNetwork;
+}
+transition({M_blockhit, MT_blockhit, SS_blockhit, MT_MB_blockhit,S_blockhit,SS_MB_blockhit}, 
+  {L1_PUTX, L1_PUTS, L1_PUTX_not_last, L1_PUTS_last, L1_PUTX_old, L1_PUTS_old}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+transition({M_blockhit, MT_blockhit, SS_blockhit, MT_MB_blockhit,S_blockhit,SS_MB_blockhit}, 
+  {L1_GETX, L1_GETS, L1_UPGRADE, L1_GET_INSTR}) {
+  zz_stallAndWaitL1RequestQueue;
+}
+
+// transition({MT_MB_blockhit, SS_MB_blockhit}, Exclusive_Unblock) {
+//     zz_stallAndWaitUblockQueue;
+// }

@@ -1,0 +1,1394 @@
+
+structure (CacheMemoryBDIXOR, external = "yes") {
+  bool cacheAvail(Addr);
+  bool cacheAvailData(Addr, int);
+  bool hasAnyUnpaired(Addr);
+  bool hasSpace(Addr, int);
+  bool cacheCanCoallocate(Addr, int);
+  Addr cacheProbe(Addr);
+  Addr cacheProbeExcludePartner(Addr);
+  Addr cacheProbeData(Addr);
+  AbstractCacheEntry getNullEntry();
+  AbstractCacheEntry allocate(Addr, AbstractCacheEntry);
+  AbstractCacheEntry allocate(Addr, AbstractCacheEntry, bool);
+  void allocateVoid(Addr, AbstractCacheEntry);
+
+  void linkDataToTag(Addr, AbstractCacheEntry, int);
+  void linkDataToTag_existing(Addr, int);
+  void unlinkDataToTag(Addr);
+  // void updateLinkDataToTag(Addr, int);
+  void profileDataUpdate(Addr, int);
+  void profileDataOverprovision();
+  
+  void deallocate(Addr);
+  AbstractCacheEntry lookup(Addr);
+  bool isTagPresent(Addr);
+  Cycles getTagLatency();
+  Cycles getDataLatency();
+  void setMRU(Addr);
+  // void setMRU(Addr, int);
+  // void setMRU(AbstractCacheEntry);
+  void recordRequestType(CacheRequestType, Addr);
+  bool checkResourceAvailable(CacheResourceType, Addr);
+
+  // hardware transactional memory
+  void htmCommitTransaction();
+  void htmAbortTransaction();
+
+  int getCacheSize();
+  int getNumBlocks();
+  Addr getAddressAtIdx(int);
+
+  void profileDemandHit();
+  void profileDemandMiss();
+  void profileDemandMissCoherence();
+  void profilePrefetchHit();
+  void profilePrefetchMiss();
+  void profileReplacementDataArray();
+  void profileReplacementTagArray();
+  void profileReplacementXOR();
+  void profileCompressedAccess(Addr,MachineID);
+  void profileUncompressedAccess();
+
+  // void profileXORDecompReason_tM();
+  void profileXORDecompReason_notRecoverable_putx();
+  void profileXORDecompReason_notRecoverable_get();
+  void profileXORDecompReason_noSharer();
+  void profileXORDecompReason_tag();
+  void profileXORDecompReason_data();
+
+  bool hasNextTag(Addr);
+  bool hasPrevTag(Addr);
+  Addr getNextTagAddress(Addr);
+  Addr getPrevTagAddress(Addr);
+  int getXORChoiceWay(Addr);
+  bool canNotXOR(Addr);
+  bool hasGoodXORCandidate(Addr, MachineID);
+  // int getXORChoiceWay_existingOnly(Addr);
+  // Addr getXORChoiceAddr_biasedRandom(Addr, MachineID);
+  Addr getXORChoiceAddr(Addr, MachineID);
+  // AbstractCacheEntry getDataEntryAtWay(Addr, int);
+  // Addr getAddrDataAtWay(Addr, int);
+  void unlockXOR(Addr);
+  void lockXOR(Addr);
+  bool isPartnerReplBlocked(Addr);
+  bool isPartnerReplBlocked_memdata(Addr);
+  void settupTempLink(Addr, Addr);
+  void validateTempLink(Addr);
+  Addr getExistingAddr(Addr);
+  void unblockRepl(Addr);
+  void rmReqToExisting(Addr);
+  DataBlock xorTwoDataBlock(Addr);
+  DataBlock tryXOR(Addr, DataBlock);
+  void profileFillNonXOR();
+  void profileFillNonXOR_noGoodCandidate();
+  void profileFillNonXOR_noSingular();
+  void profileFillXOR();
+
+  void addPendingEviction(Addr, Addr); 
+  Addr getPendingEviction(Addr); 
+  bool noPendingEviction(Addr);
+  void rmPendingEviction(Addr);
+
+  bool includeProactiveEviction();
+}
+
+structure(Compressor, external="yes") {
+  int compress(DataBlock);
+  int peek_compress(DataBlock);
+  Cycles decompress();
+}
+structure(XORer, external="yes"){
+  
+}
+
+machine(MachineType:L2Cache, "bdi xor MESI two level L2Cache")
+ : CacheMemoryBDIXOR * L2cache;
+   Cycles l2_request_latency := 2;
+   Cycles l2_response_latency := 2;
+   Cycles bypass_to_l1_latency := 1;
+   Cycles tbe_lookup_latency := 1;
+   Compressor * L2compressor;
+   XORer * L2XORer;
+
+  // Message Queues
+  // From local bank of L2 cache TO the network
+  MessageBuffer * DirRequestFromL2Cache, network="To", virtual_network="0",
+    vnet_type="request";  // this L2 bank -> Memory
+
+  MessageBuffer * L1RequestFromL2Cache, network="To", virtual_network="2",
+    vnet_type="request";  // this L2 bank -> a local L1
+
+  MessageBuffer * responseFromL2Cache, network="To", virtual_network="1",
+    vnet_type="response";  // this L2 bank -> a local L1 || Memory
+
+  // FROM the network to this local bank of L2 cache
+  MessageBuffer * unblockToL2Cache, network="From", virtual_network="2",
+    vnet_type="unblock";  // a local L1 || Memory -> this L2 bank
+
+  MessageBuffer * L1RequestToL2Cache, network="From", virtual_network="0",
+    vnet_type="request";  // a local L1 -> this L2 bank
+
+  MessageBuffer * responseToL2Cache, network="From", virtual_network="1",
+    vnet_type="response";  // a local L1 || Memory -> this L2 bank
+{
+  // STATES
+  state_declaration(State, desc="L2 Cache states", default="L2Cache_State_NP") {
+    // Base states
+    NP, AccessPermission:Invalid, desc="Not present in either cache";
+    SS, AccessPermission:Read_Only, desc="L2 cache entry Shared, also present in one or more L1s";
+    SS_sync, AccessPermission:Read_Only, desc="L2 cache entry Shared, also present in one or more L1s";
+    SS_br, AccessPermission:Busy, desc="blocked replacement from SS";
+    S, AccessPermission:Read_Only, desc="L2 cache entry Shared, not present in any L1";
+    S_sync, AccessPermission:Read_Only, desc="L2 cache entry Shared, not present in any L1";
+    S_br, AccessPermission:Read_Only, desc="blocked replacement from S";
+    M, AccessPermission:Read_Write, desc="L2 cache entry Modified, not present in any L1s", format="!b";
+    M_sync, AccessPermission:Read_Write, desc="L2 cache entry Modified, not present in any L1s", format="!b";
+    M_br, AccessPermission:Read_Write, desc="L2 cache entry Modified, not present in any L1s, blocked repl", format="!b";
+    MT, AccessPermission:Maybe_Stale, desc="L2 cache entry Modified in a local L1, assume L2 copy stale", format="!b";
+    MT_sync, AccessPermission:Maybe_Stale, desc="L2 cache entry Modified in a local L1, assume L2 copy stale", format="!b";
+    MT_br, AccessPermission:Busy, desc="blocked replacement from MT";
+
+    // L2 replacement
+    M_I, AccessPermission:Busy, desc="L2 cache replacing, have all acks, sent dirty data to memory, waiting for ACK from memory";
+    MT_I, AccessPermission:Busy, desc="L2 cache replacing, getting data from exclusive";
+    MCT_I, AccessPermission:Busy, desc="L2 cache replacing, clean in L2, getting data or ack from exclusive";
+    I_I, AccessPermission:Busy, desc="L2 replacing clean data, need to inv sharers and then drop data";
+    S_I, AccessPermission:Busy, desc="L2 replacing dirty data, collecting acks from L1s";
+
+    // Transient States for fetching data from memory
+    ISS, AccessPermission:Busy, desc="L2 idle, got single L1_GETS, issued memory fetch, have not seen response yet";
+    ISS_existing, AccessPermission:Busy, desc="L2 idle, got single L1_GETS, issued memory fetch, have not seen response yet";
+    IS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
+    IS_existing, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
+    IM, AccessPermission:Busy, desc="L2 idle, got L1_GETX, issued memory fetch, have not seen response(s) yet";
+    IM_existing, AccessPermission:Busy, desc="L2 idle, got L1_GETX, issued memory fetch, have not seen response(s) yet";
+
+    // Blocking states
+    SS_MB, AccessPermission:Busy, desc="Blocked for L1_GETX from SS";
+    SS_MB_br, AccessPermission:Busy, desc="Blocked replacement from SS_MB";
+    MT_MB, AccessPermission:Busy, desc="Blocked for L1_GETX from MT";
+    MT_MB_br, AccessPermission:Busy, desc="Blocked for L1_GETX from MT, and replacement";
+
+    MT_IIB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, waiting for unblock and data";
+    // MT_IIB_NA, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, waiting for unblock and data, NO ADD SHARER";
+    MT_IB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got unblock, waiting for data";
+    MT_SB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got data,  waiting for unblock";
+    MT_SB_br, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got data,  waiting for unblock, blocking replacement";
+    // MT_SB_NA, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got data,  waiting for unblock, no add sharer";
+    // MT_SB_NA_br, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, got data,  waiting for unblock, no add sharer";
+    
+  }
+
+  // EVENTS
+  enumeration(Event, desc="L2 Cache events") {
+    // L2 events
+
+    // events initiated by the local L1s
+    L1_GET_INSTR,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR_writecache,            desc="a L1I GET INSTR request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GET_INSTR_writecache_ngc,            desc="a L1I GET INSTR request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GET_INSTR_writecache_no_singular,            desc="a L1I GET INSTR request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GET_INSTR_writecache_xor,            desc="a L1I GET INSTR request for a block maped to us, need to make sure there is enough space for a uncompressed blk, xor with another";
+    L1_GETS,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS_writecache,                 desc="a L1D GETS request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GETS_writecache_ngc,                 desc="a L1D GETS request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GETS_writecache_no_singular,                 desc="a L1D GETS request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GETS_writecache_xor,                 desc="a L1D GETS request for a block maped to us, need to make sure there is enough space for a uncompressed blk, xor with another";
+    L1_GETX,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX_writecache,                 desc="a L1D GETX request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GETX_writecache_ngc,                 desc="a L1D GETX request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GETX_writecache_no_singular,                 desc="a L1D GETX request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_GETX_writecache_xor,                 desc="a L1D GETX request for a block maped to us, need to make sure there is enough space for a uncompressed blk";
+    L1_UPGRADE,                 desc="a L1D GETX request for a block maped to us";
+
+    L1_PUTX,                 desc="L1 replacing data";
+    L1_PUTX_not_last,                 desc="L1 replacing data";
+    L1_PUTX_writecache,      desc="L1 replacing data, will write to cache";
+    L1_PUTX_old,             desc="L1 replacing data, but no longer sharer";
+
+    L1_PUTS,                 desc="L1 replacing clean data";
+    L1_PUTS_last,                 desc="L1 replacing clean data, this is the last L1 sharer";
+    L1_PUTS_old,             desc="L1 replacing clean data, but no longer sharer";
+
+    // events initiated by this L2
+    go_to_sync,     desc="go to sync state", format="!r";
+    L2_Replacement,     desc="L2 Replacement", format="!r";
+    L2_Replacement_clean,     desc="L2 Replacement, but data is clean", format="!r";
+
+    // l2 replacements due to data array
+    L2_Replacement_l1,     desc="L2 Replacement (data array), stall l1 req", format="!r";
+    L2_Replacement_clean_l1,     desc="L2 Replacement, but data is clean (data array), stall l1 req", format="!r";
+    
+    // l2 replacements due to xor
+    L2_Replacement_xor_tag,     desc="L2 Replacement (xor), stall l1 req", format="!r";
+    L2_Replacement_xor_data,     desc="L2 Replacement (xor), stall l1 req", format="!r";
+    // L2_Replacement_xor_tM,     desc="L2 Replacement (xor), stall l1 req", format="!r";
+    L2_Replacement_xor_notRecoverable_M_PUTX,     desc="L2 Replacement (xor), stall l1 req", format="!r";
+    L2_Replacement_xor_notRecoverable_M_GET,     desc="L2 Replacement (xor), stall l1 req", format="!r";
+    L2_Replacement_xor_noSharer,     desc="L2 Replacement (xor), stall l1 req", format="!r";
+
+    L2_Replacement_clean_xor_tag,     desc="L2 Replacement, but data is clean (xor), stall l1 req", format="!r";
+    L2_Replacement_clean_xor_data,     desc="L2 Replacement, but data is clean (xor), stall l1 req", format="!r";
+    // L2_Replacement_clean_xor_tM,     desc="L2 Replacement, but data is clean (xor), stall l1 req", format="!r";s
+    L2_Replacement_clean_xor_notRecoverable_M_PUTX,     desc="L2 Replacement, but data is clean (xor), stall l1 req", format="!r";
+    L2_Replacement_clean_xor_notRecoverable_M_GET,     desc="L2 Replacement, but data is clean (xor), stall l1 req", format="!r";
+    L2_Replacement_clean_xor_noSharer,     desc="L2 Replacement, but data is clean (xor), stall l1 req", format="!r";
+
+    // events from memory controller
+    Mem_Data,     desc="data from memory", format="!r";
+    Mem_Ack,     desc="ack from memory", format="!r";
+
+    // M->S data writeback
+    WB_Data,  desc="data from L1";
+    WB_Data_clean,  desc="clean data from L1";
+    Ack,      desc="writeback ack";
+    Ack_all,      desc="writeback ack";
+
+    Unblock, desc="Unblock from L1 requestor";
+    Exclusive_Unblock, desc="Unblock from L1 requestor";
+
+    MEM_Inv, desc="Invalidation from directory";
+
+    Block_Repl, desc="This block is selected as xor candidate, block replacement until partner block is filled";
+    Unblock_Repl, desc="This block was selected as xor candidate, partner filled so it can unblock repl now";
+
+  }
+
+  // TYPES
+
+  // CacheEntry
+  structure(Entry, desc="...", interface="AbstractCacheEntry") {
+    State CacheState,          desc="cache state";
+    NetDest Sharers,               desc="tracks the L1 shares on-chip";
+    MachineID Exclusive,          desc="Exclusive holder of block";
+    DataBlock DataBlk,       desc="data for the block";
+    bool Dirty, default="false", desc="data is dirty";
+
+    Addr victim_partner, desc="address of partner of the victim block";
+    Addr victim, desc="address of the victim block";
+    int action_cntr_vp, desc="action counter if victim has partner";
+    int action_cntr_nvp, desc="action counter if victim has no partner";
+  }
+  
+  // TBE fields
+  structure(TBE, desc="...") {
+    Addr addr,            desc="Physical address for this TBE";
+    State TBEState,             desc="Transient state";
+    DataBlock DataBlk,          desc="Buffer for the data block";
+    bool Dirty, default="false", desc="Data is Dirty";
+
+    NetDest L1_GetS_IDs,            desc="Set of the internal processors that want the block in shared state";
+    MachineID L1_GetX_ID,          desc="ID of the L1 cache to forward the block to once we get a response";
+    int pendingAcks,            desc="number of pending acks for invalidates during writeback";
+  }
+
+  structure(TBETable, external="yes") {
+    TBE lookup(Addr);
+    void allocate(Addr);
+    void deallocate(Addr);
+    bool isPresent(Addr);
+  }
+
+  TBETable TBEs, template="<L2Cache_TBE>", constructor="m_number_of_TBEs";
+
+  int block_size_in_bytes, default="RubySystem::getBlockSizeBytes()";
+
+  Tick clockEdge();
+  Tick cyclesToTicks(Cycles c);
+  Cycles ticksToCycles(Tick t);
+
+  void set_cache_entry(AbstractCacheEntry a);
+  void unset_cache_entry();
+  void set_tbe(TBE a);
+  void unset_tbe();
+  void wakeUpBuffers(Addr a);
+  void profileMsgDelay(int virtualNetworkType, Cycles c);
+  MachineID mapAddressToMachine(Addr addr, MachineType mtype);
+
+  // inclusive cache, returns L2 entries only
+  Entry getCacheEntry(Addr addr), return_by_pointer="yes" {
+    return static_cast(Entry, "pointer", L2cache[addr]);
+  }
+
+  bool isSharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    if (is_valid(cache_entry)) {
+      return cache_entry.Sharers.isElement(requestor);
+    } else {
+      return false;
+    }
+  }
+
+  void addSharer(Addr addr, MachineID requestor, Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "machineID: %s, requestor: %s, address: %#x\n",
+            machineID, requestor, addr);
+    cache_entry.Sharers.add(requestor);
+  }
+
+  State getState(TBE tbe, Entry cache_entry, Addr addr) {
+    if(is_valid(tbe)) {
+      return tbe.TBEState;
+    } else if (is_valid(cache_entry)) {
+      return cache_entry.CacheState;
+    }
+    return State:NP;
+  }
+
+  void setState(TBE tbe, Entry cache_entry, Addr addr, State state) {
+    // MUST CHANGE
+    if (is_valid(tbe)) {
+      tbe.TBEState := state;
+    }
+
+    if (is_valid(cache_entry)) {
+      cache_entry.CacheState := state;
+    }
+  }
+
+  AccessPermission getAccessPermission(Addr addr) {
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      DPRINTF(RubySlicc, "%s\n", L2Cache_State_to_permission(tbe.TBEState));
+      return L2Cache_State_to_permission(tbe.TBEState);
+    }
+
+    Entry cache_entry := getCacheEntry(addr);
+    if(is_valid(cache_entry)) {
+      DPRINTF(RubySlicc, "%s\n", L2Cache_State_to_permission(cache_entry.CacheState));
+      return L2Cache_State_to_permission(cache_entry.CacheState);
+    }
+
+    DPRINTF(RubySlicc, "%s\n", AccessPermission:NotPresent);
+    return AccessPermission:NotPresent;
+  }
+
+  void functionalRead(Addr addr, Packet *pkt) {
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      testAndRead(addr, tbe.DataBlk, pkt);
+    } else {
+      testAndRead(addr, getCacheEntry(addr).DataBlk, pkt);
+    }
+  }
+
+  int functionalWrite(Addr addr, Packet *pkt) {
+    int num_functional_writes := 0;
+
+    TBE tbe := TBEs[addr];
+    if(is_valid(tbe)) {
+      num_functional_writes := num_functional_writes +
+        testAndWrite(addr, tbe.DataBlk, pkt);
+      return num_functional_writes;
+    }
+
+    num_functional_writes := num_functional_writes +
+        testAndWrite(addr, getCacheEntry(addr).DataBlk, pkt);
+    return num_functional_writes;
+  }
+
+  void setAccessPermission(Entry cache_entry, Addr addr, State state) {
+    if (is_valid(cache_entry)) {
+      cache_entry.changePermission(L2Cache_State_to_permission(state));
+    }
+  }
+
+  bool isDirty(Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    return cache_entry.Dirty;
+  }
+
+  Event L1Cache_request_type_to_event(CoherenceRequestType type, Addr addr,
+                                      MachineID requestor, Entry cache_entry, State state) {
+    if (type == CoherenceRequestType:PUTX) {
+      if (isSharer(addr, requestor, cache_entry)) {
+        if (!is_valid(cache_entry) || cache_entry.CacheState != State:MT) {
+          if (cache_entry.Sharers.count() == 1) {
+            return Event:L1_PUTX;
+          } else {
+            return Event:L1_PUTX_not_last;
+          }
+          // return Event:L1_PUTX;
+        } else {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_PUTX_writecache\n");
+          DPRINTF(RubySlicc, "needs to check space in data\n");
+          return Event:L1_PUTX_writecache;
+        }
+      } else {
+        return Event:L1_PUTX_old;
+      }
+    } else if (type == CoherenceRequestType:PUTS) {
+      if (isSharer(addr, requestor, cache_entry)) {
+        if (cache_entry.Sharers.count() == 1) {
+          return Event:L1_PUTS_last;
+        } else {
+          return Event:L1_PUTS;
+        }
+      } else {
+        return Event:L1_PUTS_old;
+      }
+    } else if(type == CoherenceRequestType:GETS) {
+      if (state == State:NP || state == State:MT) {
+        if (state == State:NP) {
+          DPRINTF(RubySlicc, "from NP state-needs to check whether we should do xor or not\n");
+          if (L2cache.isPartnerReplBlocked(addr)) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETS_writecache_xor because we have decided this previously\n");
+            return Event:L1_GETS_writecache_xor;
+          }
+          if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == true) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETS_writecache_xor\n");
+            return Event:L1_GETS_writecache_xor;
+          }
+          //////// impact of lock states ////////
+          else if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == false) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETS_writecache_ngc\n");
+            return Event:L1_GETS_writecache_ngc;
+          }
+          //////// impact of lock states ////////
+          //////// impact of pairing ////////
+          else if (L2cache.canNotXOR(addr) == true) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETS_writecache_no_singular\n");
+            return Event:L1_GETS_writecache_no_singular;
+          }
+          //////// impact of pairing ////////
+        }
+        DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETS_writecache\n");
+        return Event:L1_GETS_writecache;
+      }
+      DPRINTF(RubySlicc, "returning L1_GETS\n");
+      return Event:L1_GETS;
+    } else if(type == CoherenceRequestType:GET_INSTR) {
+      if (state == State:NP) {
+        DPRINTF(RubySlicc, "needs to check whether we should do xor or not\n");
+        if (L2cache.isPartnerReplBlocked(addr)) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GET_INSTR_writecache_xor because we have decided this previously\n");
+          return Event:L1_GET_INSTR_writecache_xor;
+        }
+        if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == true) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GET_INSTR_writecache_xor\n");
+          return Event:L1_GET_INSTR_writecache_xor;
+        }
+        //////// impact of lock states ////////
+        else if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == false) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GET_INSTR_writecache_ngc\n");
+          return Event:L1_GET_INSTR_writecache_ngc;
+        }
+        //////// impact of lock states ////////
+        //////// impact of pairing ////////
+        else if (L2cache.canNotXOR(addr) == true) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GET_INSTR_writecache_no_singular\n");
+          return Event:L1_GET_INSTR_writecache_no_singular;
+        }
+        //////// impact of pairing ////////
+        DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GET_INSTR_writecache\n");
+        return Event:L1_GET_INSTR_writecache;
+      }
+      if (state == State:MT) {
+        // MT state if receive get_instr we need to evict partner to prepare WB
+        DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GET_INSTR_writecache\n");
+        return Event:L1_GET_INSTR_writecache;
+      }
+      DPRINTF(RubySlicc, "returning L1_GET_INSTR\n");
+      return Event:L1_GET_INSTR;
+    } else if (type == CoherenceRequestType:GETX) {
+      if (state == State:NP) {
+        DPRINTF(RubySlicc, "needs to check whether we should do xor or not\n");
+        if (L2cache.isPartnerReplBlocked(addr)) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_xor because we have decided this previously\n");
+          return Event:L1_GETX_writecache_xor;
+        }
+        if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == true) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_xor\n");
+          return Event:L1_GETX_writecache_xor;
+        }
+        //////// impact of lock states ////////
+        else if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == false) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_ngc\n");
+          return Event:L1_GETX_writecache_ngc;
+        }
+        //////// impact of lock states ////////
+        //////// impact of pairing ////////
+        else if (L2cache.canNotXOR(addr) == true) {
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_no_singular\n");
+          return Event:L1_GETX_writecache_no_singular;
+        }
+        //////// impact of pairing ////////
+        
+        DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache\n");
+        return Event:L1_GETX_writecache;
+      }
+      // if ((state == State:S || state == State:SS || state == State:M) && (L2cache.hasNextTag(addr) || L2cache.hasPrevTag(addr))) {
+      //   DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache\n");
+      //   return Event:L1_GETX_writecache;
+      // }
+      DPRINTF(RubySlicc, "returning L1_GETX\n");
+      return Event:L1_GETX;
+    } else if (type == CoherenceRequestType:UPGRADE) {
+      if ( is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor) ) {
+        // if ((state == State:S || state == State:SS || state == State:M) && (L2cache.hasNextTag(addr) || L2cache.hasPrevTag(addr))) {
+        //   DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache\n");
+        //   return Event:L1_GETX_writecache;
+        // }
+        return Event:L1_UPGRADE;
+      } 
+      else {
+        if ( is_valid(cache_entry) && !cache_entry.Sharers.isElement(requestor) ) {
+          DPRINTF(RubySlicc, "this blocks sharers: %s\n",cache_entry.Sharers);
+        }
+        if (state == State:NP) {
+          DPRINTF(RubySlicc, "needs to check whether we should do xor or not\n");
+          if (L2cache.isPartnerReplBlocked(addr)) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_xor because we have decided this previously\n");
+            return Event:L1_GETX_writecache_xor;
+          }
+          if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == true) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_xor\n");
+            return Event:L1_GETX_writecache_xor;
+          }
+          //////// impact of lock states ////////
+          else if (L2cache.canNotXOR(addr) == false && L2cache.hasGoodXORCandidate(addr, requestor) == false) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_ngc\n");
+            return Event:L1_GETX_writecache_ngc;
+          }
+          //////// impact of lock states ////////
+          //////// impact of pairing ////////
+          else if (L2cache.canNotXOR(addr) == true) {
+            DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache_no_singular\n");
+            return Event:L1_GETX_writecache_no_singular;
+          }
+          //////// impact of pairing ////////
+          DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache\n");
+          return Event:L1_GETX_writecache;
+        }
+        // if ((state == State:S || state == State:SS || state == State:M) && (L2cache.hasNextTag(addr) || L2cache.hasPrevTag(addr))) {
+        //   DPRINTF(RubySlicc, "L1Cache_request_type2event returning L1_GETX_writecache\n");
+        //   return Event:L1_GETX_writecache;
+        // }
+        DPRINTF(RubySlicc, "returning L1_GETX\n");
+        return Event:L1_GETX;
+      }
+    } else {
+      DPRINTF(RubySlicc, "address: %#x, Request Type: %s\n", addr, type);
+      error("Invalid L1 forwarded request type");
+    }
+  }
+
+
+
+  int getPendingAcks(TBE tbe) {
+    return tbe.pendingAcks;
+  }
+
+  // ** OUT_PORTS **
+
+  out_port(L1RequestL2Network_out, RequestMsg, L1RequestFromL2Cache);
+  out_port(DirRequestL2Network_out, RequestMsg, DirRequestFromL2Cache);
+  out_port(responseL2Network_out, ResponseMsg, responseFromL2Cache);
+
+
+  in_port(L1unblockNetwork_in, ResponseMsg, unblockToL2Cache, rank = 2) {
+    if(L1unblockNetwork_in.isReady(clockEdge())) {
+      peek(L1unblockNetwork_in,  ResponseMsg) {
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+        DPRINTF(RubySlicc, "Addr: %#x State: %s Sender: %s Type: %s Dest: %s\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Sender, in_msg.Type, in_msg.Destination);
+
+        assert(in_msg.Destination.isElement(machineID));
+        if (in_msg.Type == CoherenceResponseType:EXCLUSIVE_UNBLOCK) {
+          trigger(Event:Exclusive_Unblock, in_msg.addr, cache_entry, tbe);
+        } else if (in_msg.Type == CoherenceResponseType:UNBLOCK) {
+          trigger(Event:Unblock, in_msg.addr, cache_entry, tbe);
+        } else {
+          error("unknown unblock message");
+        }
+      }
+    }
+  }
+
+  // Response  L2 Network - response msg to this particular L2 bank
+  in_port(responseL2Network_in, ResponseMsg, responseToL2Cache, rank = 1) {
+    if (responseL2Network_in.isReady(clockEdge())) {
+      peek(responseL2Network_in, ResponseMsg) {
+        // test wether it's from a local L1 or an off chip source
+        assert(in_msg.Destination.isElement(machineID));
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+
+        if(machineIDToMachineType(in_msg.Sender) == MachineType:L1Cache) {
+          if(in_msg.Type == CoherenceResponseType:DATA) {
+              if (in_msg.Dirty) {
+                trigger(Event:WB_Data, in_msg.addr, cache_entry, tbe);
+              } else {
+                trigger(Event:WB_Data_clean, in_msg.addr, cache_entry, tbe);
+              }
+          } else if (in_msg.Type == CoherenceResponseType:ACK) {
+            if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
+              trigger(Event:Ack_all, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Ack, in_msg.addr, cache_entry, tbe);
+            }
+          } else {
+            error("unknown message type");
+          }
+
+        } else { // external message
+          if(in_msg.Type == CoherenceResponseType:MEMORY_DATA) {
+              if (L2cache.isPartnerReplBlocked_memdata(in_msg.addr)) {
+                Addr existing_addr := L2cache.getExistingAddr(in_msg.addr);
+                Entry existing_entry := getCacheEntry(existing_addr);
+                assert(is_valid(existing_entry));
+                trigger(Event:Unblock_Repl, existing_addr, existing_entry,  TBEs[existing_addr]);
+              }
+              else {
+                trigger(Event:Mem_Data, in_msg.addr, cache_entry, tbe);
+              }
+          } else if(in_msg.Type == CoherenceResponseType:MEMORY_ACK) {
+              trigger(Event:Mem_Ack, in_msg.addr, cache_entry, tbe);
+          } else if(in_msg.Type == CoherenceResponseType:INV) {
+              trigger(Event:MEM_Inv, in_msg.addr, cache_entry, tbe);
+          } else {
+            error("unknown message type");
+          }
+        }
+      }
+    }  // if not ready, do nothing
+  }
+
+  // L1 Request
+  in_port(L1RequestL2Network_in, RequestMsg, L1RequestToL2Cache, rank = 0) {
+    if(L1RequestL2Network_in.isReady(clockEdge())) {
+      peek(L1RequestL2Network_in,  RequestMsg) {
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+
+        DPRINTF(RubySlicc, "\n\n\nAddr: %#x State: %s Req: %s Type: %s Dest: %s\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Requestor, in_msg.Type, in_msg.Destination);
+
+        assert(machineIDToMachineType(in_msg.Requestor) == MachineType:L1Cache);
+        assert(in_msg.Destination.isElement(machineID));
+
+        // bool putx_dirty := false;
+        // if (in_msg.Type == CoherenceRequestType:PUTX) {
+        //   putx_dirty := in_msg.Dirty;
+        // }
+        Event ret := L1Cache_request_type_to_event(in_msg.Type, in_msg.addr,
+                                                in_msg.Requestor, cache_entry, getState(tbe, cache_entry, in_msg.addr));
+
+        if (is_valid(cache_entry)) {
+          // The L2 contains the block, so proceeded with handling the request
+          if (ret != Event:L1_GETX_writecache && ret != Event:L1_PUTX_writecache && ret != Event:L1_GETS_writecache && ret != Event:L1_GET_INSTR_writecache 
+            && ret != Event:L1_GETS_writecache_ngc && ret != Event:L1_GET_INSTR_writecache_ngc && ret != Event:L1_GETX_writecache_ngc
+            && ret != Event:L1_GETS_writecache_no_singular && ret != Event:L1_GET_INSTR_writecache_no_singular && ret != Event:L1_GETX_writecache_no_singular
+            && ret != Event:L1_GETS_writecache_xor && ret != Event:L1_GET_INSTR_writecache_xor
+            && ret != Event:L1_PUTS_last && ret != Event:L1_PUTX) {
+            // normal execution
+            DPRINTF(RubySlicc, "valid cache entry normal execution\n");
+            trigger(ret,in_msg.addr, cache_entry, tbe);
+          }
+          // =============================== MT L1_PUTX_writecache ===============================
+          // wb happening now
+          else if (ret == Event:L1_PUTX_writecache) {
+            assert (cache_entry.CacheState == State:MT); 
+            // note: partner data in not recoverable
+            // if blk has a partner
+            if (in_msg.Dirty == true) { // only need to update data when it is dirty
+              if ((L2cache.hasNextTag(in_msg.addr)) || (L2cache.hasPrevTag(in_msg.addr))) {
+                if (L2cache.hasNextTag(in_msg.addr)) {
+                  DPRINTF(RubySlicc, "inportFlow-MT,PUTX 1. evict partner(next)\n");
+                  Addr addr_next := L2cache.getNextTagAddress(in_msg.addr);
+                  Entry L2cache_entry_next := getCacheEntry(addr_next);
+                  if (isDirty(L2cache_entry_next)) {
+                    trigger(Event:L2_Replacement_xor_notRecoverable_M_PUTX, addr_next, L2cache_entry_next, TBEs[addr_next]);
+                    
+                  } else {
+                    trigger(Event:L2_Replacement_clean_xor_notRecoverable_M_PUTX,
+                            addr_next, L2cache_entry_next, TBEs[addr_next]);
+                  }
+                }
+                else if (L2cache.hasPrevTag(in_msg.addr)) {
+                  DPRINTF(RubySlicc, "inportFlow-MT,PUTX 1. evict partner(prev)\n");
+                  Addr addr_prev := L2cache.getPrevTagAddress(in_msg.addr);
+                  Entry L2cache_entry_prev := getCacheEntry(addr_prev);
+                  if (isDirty(L2cache_entry_prev)) {
+                    trigger(Event:L2_Replacement_xor_notRecoverable_M_PUTX, addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                    
+                  } else {
+                    trigger(Event:L2_Replacement_clean_xor_notRecoverable_M_PUTX,
+                            addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                  }
+                }
+              }
+            }
+
+            if (L2cache.includeProactiveEviction() == true) {
+              // check partner's sharer count
+              if ((L2cache.hasNextTag(in_msg.addr)) || (L2cache.hasPrevTag(in_msg.addr))) {
+                  if (L2cache.hasNextTag(in_msg.addr)) {
+                    Addr addr_next := L2cache.getNextTagAddress(in_msg.addr);
+                    Entry L2cache_entry_next := getCacheEntry(addr_next);
+                    if (L2cache_entry_next.Sharers.count() == 0) {
+                    // if (L2cache_entry_next.CacheState == State:M || L2cache_entry_next.CacheState == State:S) {
+                      assert(L2cache_entry_next.Sharers.count() == 0);
+                      DPRINTF(RubySlicc, "inportFlow-MT,PUTX 1. evict partner(next) no sharer\n");
+                      if (isDirty(L2cache_entry_next)) {
+                        trigger(Event:L2_Replacement_xor_noSharer, addr_next, L2cache_entry_next, TBEs[addr_next]);
+                        
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_noSharer,
+                                addr_next, L2cache_entry_next, TBEs[addr_next]);
+                      }
+                    }
+                    else {
+                      assert((L2cache_entry_next.CacheState != State:M && L2cache_entry_next.CacheState != State:S));
+                      DPRINTF(RubySlicc, "partner (next) still has sharer! state=%s\n",L2cache_entry_next.CacheState);
+                    }
+                  }
+                  else if (L2cache.hasPrevTag(in_msg.addr)) {
+                    Addr addr_prev := L2cache.getPrevTagAddress(in_msg.addr);
+                    Entry L2cache_entry_prev := getCacheEntry(addr_prev);
+                    if (L2cache_entry_prev.Sharers.count() == 0) {
+                      DPRINTF(RubySlicc, "inportFlow-MT,PUTX 1. evict partner(prev) no sharer\n");
+                      if (isDirty(L2cache_entry_prev)) {
+                        trigger(Event:L2_Replacement_xor_noSharer, addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                        
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_noSharer,
+                                addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                      }
+                    }
+                    else {
+                      assert((L2cache_entry_prev.CacheState != State:M && L2cache_entry_prev.CacheState != State:S));
+                      DPRINTF(RubySlicc, "partner (prev) still has sharer! state=%s\n",L2cache_entry_prev.CacheState);
+                    }
+                  }
+              }
+            }
+
+            int data_size := L2compressor.peek_compress(in_msg.DataBlk); 
+            // prepare for wb, get data from partner and xor and compress
+
+            DPRINTF(RubySlicc, "From MT state(L1_PUTX_writecache): begin to check data array coallocate 1\n");
+            // check data array can coallocate
+            if (L2cache.cacheCanCoallocate(in_msg.addr, data_size)) {
+              DPRINTF(RubySlicc, "From MT state(L1_PUTX_writecache): ok\n");
+              DPRINTF(RubySlicc, "inportFlow-MT,PUTX 6. main action\n");
+              trigger(Event:L1_PUTX_writecache, in_msg.addr, cache_entry, tbe);
+            } else {
+              DPRINTF(RubySlicc, "From MT state(L1_PUTX_writecache): begin to replace (write expansion)\n");
+              // No room in the L2 data, so we need to make room
+              Addr victim := L2cache.cacheProbeData(in_msg.addr);
+              Entry L2cache_entry := getCacheEntry(victim);
+              // if victim has a partner
+              if ((L2cache.hasNextTag(victim) || L2cache.hasPrevTag(victim))) {
+                assert(!L2cache.hasPrevTag(victim));
+                // evict it
+                Addr victim_tail := L2cache.getNextTagAddress(victim);
+                Entry L2cache_entry_tail := getCacheEntry(victim_tail);
+                // if victim's partner not in sync state
+                if (L2cache_entry_tail.CacheState != State:M_sync &&
+                  L2cache_entry_tail.CacheState != State:S_sync &&
+                  L2cache_entry_tail.CacheState != State:SS_sync &&
+                  L2cache_entry_tail.CacheState != State:MT_sync) {
+                  //trigger go into sync
+                  DPRINTF(RubySlicc, "inportFlow-MT,PUTX 2. data victim's partner(next) going into sync state\n");
+                  trigger(Event:go_to_sync, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                }
+                else {
+                  // partner already in sync state
+                  // if I am not in sync state
+                  if (L2cache_entry.CacheState != State:M_sync &&
+                  L2cache_entry.CacheState != State:S_sync &&
+                  L2cache_entry.CacheState != State:SS_sync &&
+                  L2cache_entry.CacheState != State:MT_sync) {
+                    // I should move into sync state
+                    DPRINTF(RubySlicc, "inportFlow-MT,PUTX 3. data victim going into sync state\n");
+                    trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                  }
+                  // if i am in sync state too
+                  else {
+                    DPRINTF(RubySlicc, "inportFlow-MT,PUTX 4. data victim's partner(next) evicting\n");
+                    // partner can start deallocating
+                    if (isDirty(L2cache_entry_tail)) {
+                      trigger(Event:L2_Replacement_xor_data, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                    } else {
+                      trigger(Event:L2_Replacement_clean_xor_data,
+                              victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                    }
+                  }
+                }
+                
+              }
+              // no partner or partner gone, i need to deallocate
+              DPRINTF(RubySlicc, "inportFlow-MT,PUTX 5. data victim evicting\n");
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_l1, victim, L2cache_entry, TBEs[victim]);
+              } else {
+                trigger(Event:L2_Replacement_clean_l1,
+                        victim, L2cache_entry, TBEs[victim]);
+              }        
+            }  
+          }
+          // =============================== MT L1_GETS/INSTR_writecache ===============================
+          // wb happening soon-done
+          else if (cache_entry.CacheState == State:MT && (ret == Event:L1_GETS_writecache || ret == Event:L1_GET_INSTR_writecache)) {
+
+            // if blk has a partner
+            if ((L2cache.hasNextTag(in_msg.addr)) || (L2cache.hasPrevTag(in_msg.addr))) {
+              if (L2cache.hasNextTag(in_msg.addr)) {
+                DPRINTF(RubySlicc, "inportFlow-MT,GET 1. evict partner(next)\n");
+                Addr addr_next := L2cache.getNextTagAddress(in_msg.addr);
+                Entry L2cache_entry_next := getCacheEntry(addr_next);
+                if (isDirty(L2cache_entry_next)) {
+                  trigger(Event:L2_Replacement_xor_notRecoverable_M_GET, addr_next, L2cache_entry_next, TBEs[addr_next]);
+                  
+                } else {
+                  trigger(Event:L2_Replacement_clean_xor_notRecoverable_M_GET,
+                          addr_next, L2cache_entry_next, TBEs[addr_next]);
+                }
+              }
+              else if (L2cache.hasPrevTag(in_msg.addr)) {
+                DPRINTF(RubySlicc, "inportFlow-MT,GET 1. evict partner(prev)\n");
+                Addr addr_prev := L2cache.getPrevTagAddress(in_msg.addr);
+                Entry L2cache_entry_prev := getCacheEntry(addr_prev);
+                if (isDirty(L2cache_entry_prev)) {
+                  trigger(Event:L2_Replacement_xor_notRecoverable_M_GET, addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                  
+                } else {
+                  trigger(Event:L2_Replacement_clean_xor_notRecoverable_M_GET,
+                          addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                }
+              }
+            }
+            
+            int data_size := block_size_in_bytes;
+            DPRINTF(RubySlicc, "From MT state(L1_GETS/INSTR_writecache*): begin to check data array can coallocate\n");
+            
+            // check data array can coallocate
+            if (L2cache.cacheCanCoallocate(in_msg.addr, data_size)) {
+              DPRINTF(RubySlicc, "From MT state(L1_GETS/INSTR_writecache*): ok\n");
+              DPRINTF(RubySlicc, "inportFlow-MT,GET 6. main action\n");
+              trigger(ret, in_msg.addr, cache_entry, tbe);
+            } else {
+              DPRINTF(RubySlicc, "From MT state(L1_GETS/INSTR_writecache*): begin to replace (write expansion)\n");
+              // assert(false);
+              // No room in the L2 data, so we need to make room
+              // first eviction
+              Addr victim := L2cache.cacheProbeData(in_msg.addr);
+              Entry L2cache_entry := getCacheEntry(victim);
+              // if victim has a partner
+              if ((L2cache.hasNextTag(victim) || L2cache.hasPrevTag(victim))) {
+                assert(!L2cache.hasPrevTag(victim));
+                // evict it
+                Addr victim_tail := L2cache.getNextTagAddress(victim);
+                Entry L2cache_entry_tail := getCacheEntry(victim_tail);
+                // if victim's partner not in sync state
+                if (L2cache_entry_tail.CacheState != State:M_sync &&
+                  L2cache_entry_tail.CacheState != State:S_sync &&
+                  L2cache_entry_tail.CacheState != State:SS_sync &&
+                  L2cache_entry_tail.CacheState != State:MT_sync) {
+                  //trigger go into sync
+                  DPRINTF(RubySlicc, "inportFlow-MT,GET 2. data victim's partner(next) going into sync state\n");
+                  trigger(Event:go_to_sync, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                }
+                else {
+                  // partner already in sync state
+                  // if I am not in sync state
+                  if (L2cache_entry.CacheState != State:M_sync &&
+                  L2cache_entry.CacheState != State:S_sync &&
+                  L2cache_entry.CacheState != State:SS_sync &&
+                  L2cache_entry.CacheState != State:MT_sync) {
+                    // I should move into sync state
+                    DPRINTF(RubySlicc, "inportFlow-MT,GET 3. data victim going into sync state\n");
+                    trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                  }
+                  // if i am in sync state too
+                  else {
+                    DPRINTF(RubySlicc, "inportFlow-MT,GET 4. data victim's partner(next) evicting\n");
+                    // partner can start deallocating
+                    if (isDirty(L2cache_entry_tail)) {
+                      trigger(Event:L2_Replacement_xor_data, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                    } else {
+                      trigger(Event:L2_Replacement_clean_xor_data,
+                              victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                    }
+                  }
+                }
+                
+              }
+              // no partner or partner gone, i need to deallocate
+              DPRINTF(RubySlicc, "inportFlow-MT,GET 5. data victim evicting\n");
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement_l1, victim, L2cache_entry, TBEs[victim]);
+              } else {
+                trigger(Event:L2_Replacement_clean_l1,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+            
+          }
+          // =============================== L1_PUTS_last ===============================
+          else if (ret == Event:L1_PUTS_last) {
+            if (L2cache.includeProactiveEviction() == true) {
+              // check partner's sharer count
+              if ((L2cache.hasNextTag(in_msg.addr)) || (L2cache.hasPrevTag(in_msg.addr))) {
+                  if (L2cache.hasNextTag(in_msg.addr)) {
+                    Addr addr_next := L2cache.getNextTagAddress(in_msg.addr);
+                    Entry L2cache_entry_next := getCacheEntry(addr_next);
+                    if (L2cache_entry_next.Sharers.count() == 0) {
+                      DPRINTF(RubySlicc, "inportFlow-PUTS_last 1. evict partner(next) no sharer\n");
+                      if (isDirty(L2cache_entry_next)) {
+                        trigger(Event:L2_Replacement_xor_noSharer, addr_next, L2cache_entry_next, TBEs[addr_next]);
+                        
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_noSharer,
+                                addr_next, L2cache_entry_next, TBEs[addr_next]);
+                      }
+                    }
+                    else {
+                      assert((L2cache_entry_next.CacheState != State:M && L2cache_entry_next.CacheState != State:S));
+                      DPRINTF(RubySlicc, "partner (next) still has sharer! state=%s\n",L2cache_entry_next.CacheState);
+                    }
+                  }
+                  else if (L2cache.hasPrevTag(in_msg.addr)) {
+                    Addr addr_prev := L2cache.getPrevTagAddress(in_msg.addr);
+                    Entry L2cache_entry_prev := getCacheEntry(addr_prev);
+                    if (L2cache_entry_prev.Sharers.count() == 0) {
+                      DPRINTF(RubySlicc, "inportFlow-PUTS_last 1. evict partner(prev) no sharer\n");
+                      if (isDirty(L2cache_entry_prev)) {
+                        trigger(Event:L2_Replacement_xor_noSharer, addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                        
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_noSharer,
+                                addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                      }
+                    }
+                    else {
+                      assert((L2cache_entry_prev.CacheState != State:M && L2cache_entry_prev.CacheState != State:S));
+                      DPRINTF(RubySlicc, "partner (prev) still has sharer! state=%s\n",L2cache_entry_prev.CacheState);
+                    }
+                  }
+              }
+              // remaining is normal execution
+            }
+            DPRINTF(RubySlicc, "remaining normal execution\n");
+            trigger(ret,in_msg.addr, cache_entry, tbe);
+          }
+          // =============================== L1_PUTX ===============================
+          else if (ret == Event:L1_PUTX) {
+            if (L2cache.includeProactiveEviction() == true) {
+              // check partner's sharer count
+              if ((L2cache.hasNextTag(in_msg.addr)) || (L2cache.hasPrevTag(in_msg.addr))) {
+                  if (L2cache.hasNextTag(in_msg.addr)) {
+                    Addr addr_next := L2cache.getNextTagAddress(in_msg.addr);
+                    Entry L2cache_entry_next := getCacheEntry(addr_next);
+                    if (L2cache_entry_next.Sharers.count() == 0) {
+                      DPRINTF(RubySlicc, "inportFlow-PUTX(last) 1. evict partner(next) no sharer\n");
+                      if (isDirty(L2cache_entry_next)) {
+                        trigger(Event:L2_Replacement_xor_noSharer, addr_next, L2cache_entry_next, TBEs[addr_next]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_noSharer,
+                                addr_next, L2cache_entry_next, TBEs[addr_next]);
+                      }
+                    }
+                    else {
+                      assert((L2cache_entry_next.CacheState != State:M && L2cache_entry_next.CacheState != State:S));
+                      DPRINTF(RubySlicc, "partner (next) still has sharer! state=%s\n",L2cache_entry_next.CacheState);
+                    }
+                  }
+                  else if (L2cache.hasPrevTag(in_msg.addr)) {
+                    Addr addr_prev := L2cache.getPrevTagAddress(in_msg.addr);
+                    Entry L2cache_entry_prev := getCacheEntry(addr_prev);
+                    if (L2cache_entry_prev.Sharers.count() == 0) {
+                      DPRINTF(RubySlicc, "inportFlow-PUTX(last) 1. evict partner(prev) no sharer\n");
+                      if (isDirty(L2cache_entry_prev)) {
+                        trigger(Event:L2_Replacement_xor_noSharer, addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_noSharer,
+                                addr_prev, L2cache_entry_prev, TBEs[addr_prev]);
+                      }
+                    }
+                    else {
+                      assert((L2cache_entry_prev.CacheState != State:M && L2cache_entry_prev.CacheState != State:S));
+                      DPRINTF(RubySlicc, "partner (prev) still has sharer! state=%s\n",L2cache_entry_prev.CacheState);
+                    }
+                  }
+              }
+            }
+            // remaining is normal execution
+            DPRINTF(RubySlicc, "remaining normal execution\n");
+            trigger(ret,in_msg.addr, cache_entry, tbe);
+          }
+          else{
+            assert(false);
+          }
+        }
+        else {
+          //  NP
+          assert(ret != Event:L1_PUTX_writecache); 
+          // =============================== NP normal execution ===============================
+          if (ret != Event:L1_GETX_writecache && ret != Event:L1_GETS_writecache && ret != Event:L1_GET_INSTR_writecache && 
+            ret != Event:L1_GETS_writecache_ngc && ret != Event:L1_GET_INSTR_writecache_ngc && ret != Event:L1_GETX_writecache_ngc &&
+            ret != Event:L1_GETS_writecache_no_singular && ret != Event:L1_GET_INSTR_writecache_no_singular && ret != Event:L1_GETX_writecache_no_singular &&
+            ret != Event:L1_GETS_writecache_xor && ret != Event:L1_GET_INSTR_writecache_xor && ret != Event:L1_GETX_writecache_xor) {
+            //normal execution
+            State state := getState(tbe, cache_entry, in_msg.addr);
+            if (state == State:NP) {
+              assert(ret == Event:L1_PUTX_old || ret == Event:L1_PUTS_old);
+              trigger(ret, in_msg.addr, cache_entry, tbe);
+            }
+            else if (state == State:M_I || state == State:MT_I || state == State:MCT_I || 
+              state == State:S_I || state == State:I_I)
+            {
+              DPRINTF(RubySlicc, "%s\n",ret);
+              trigger(ret, in_msg.addr, cache_entry, tbe);
+            }
+            else {
+              DPRINTF(RubySlicc, "%s\n",ret);
+              assert(false);
+            }
+          }
+          // =============================== NP L1_GETX/S/INSTR_writecache ===============================
+          else if (ret == Event:L1_GETX_writecache || ret == Event:L1_GETS_writecache || ret == Event:L1_GET_INSTR_writecache ||
+          ret == Event:L1_GETX_writecache_ngc || ret == Event:L1_GETS_writecache_ngc || ret == Event:L1_GET_INSTR_writecache_ngc ||
+          ret == Event:L1_GETX_writecache_no_singular || ret == Event:L1_GETS_writecache_no_singular || ret == Event:L1_GET_INSTR_writecache_no_singular
+          ) {
+            State state := getState(tbe, cache_entry, in_msg.addr);
+            assert(state == State:NP);
+            DPRINTF(RubySlicc, "NP L1_GETX/S/INSTR_writecache\n");
+            int data_size := block_size_in_bytes;
+            if (L2cache.cacheAvail(in_msg.addr) && L2cache.noPendingEviction(in_msg.addr)) {
+              DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache): tag ready=>begin to check data array avail\n");
+              // check data array can coallocate
+              if (L2cache.hasSpace(in_msg.addr, data_size)) { // we have determined not to xor => check space only
+                DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache): ok\n");
+                DPRINTF(RubySlicc, "inportRplFlow-final. main action\n");
+                trigger(ret, in_msg.addr, cache_entry, tbe);
+              } else {
+                DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache): begin to replace (write expansion)\n");
+                // No room in the L2 data, so we need to make room
+                Addr victim := L2cache.cacheProbeData(in_msg.addr);
+                Entry L2cache_entry := getCacheEntry(victim);
+
+                // if victim has a partner
+                if ((L2cache.hasNextTag(victim) || L2cache.hasPrevTag(victim))) {
+                  assert(!L2cache.hasPrevTag(victim));
+                  // evict it
+                  Addr victim_tail := L2cache.getNextTagAddress(victim);
+                  Entry L2cache_entry_tail := getCacheEntry(victim_tail);
+                  // if victim's partner not in sync state
+                  if (L2cache_entry_tail.CacheState != State:M_sync &&
+                    L2cache_entry_tail.CacheState != State:S_sync &&
+                    L2cache_entry_tail.CacheState != State:SS_sync &&
+                    L2cache_entry_tail.CacheState != State:MT_sync) {
+                    //trigger go into sync
+                    DPRINTF(RubySlicc, "inportRplFlow(vp)1. data victim's partner(next) going into sync state\n");
+                    trigger(Event:go_to_sync, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                  }
+                  else {
+                    // partner already in sync state
+                    // if I am not in sync state
+                    if (L2cache_entry.CacheState != State:M_sync &&
+                    L2cache_entry.CacheState != State:S_sync &&
+                    L2cache_entry.CacheState != State:SS_sync &&
+                    L2cache_entry.CacheState != State:MT_sync) {
+                      // I should move into sync state
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)2. data victim going into sync state\n");
+                      trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                    }
+                    // if i am in sync state too
+                    else {
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)3. data victim's partner(next) evicting\n");
+                      // partner can start deallocating
+                      if (isDirty(L2cache_entry_tail)) {
+                        trigger(Event:L2_Replacement_xor_data, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_data,
+                                victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                      }
+                    }
+                  }
+                  
+                }
+                // no partner or partner gone, i need to deallocate
+                DPRINTF(RubySlicc, "inportRplFlow(no vp)1. data victim evicting\n");
+                if (isDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement_l1, victim, L2cache_entry, TBEs[victim]);
+                } else {
+                  trigger(Event:L2_Replacement_clean_l1,
+                          victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+            }
+            else {
+              // if there is a pending evicion (resulting of inportRplFlow3)
+              if (!L2cache.noPendingEviction(in_msg.addr)) {
+                DPRINTF(RubySlicc, "inportRplFlow(vp)4. tag victim evicting-victim had partner\n");
+                Addr victim := L2cache.getPendingEviction(in_msg.addr);
+                Entry L2cache_entry := getCacheEntry(victim);
+                assert(L2cache_entry.CacheState == State:M_sync ||
+                    L2cache_entry.CacheState == State:S_sync ||
+                    L2cache_entry.CacheState == State:SS_sync ||
+                    L2cache_entry.CacheState == State:MT_sync);
+                // victim partner gone, victim need to deallocate
+                if (isDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+                } else {
+                  trigger(Event:L2_Replacement_clean,
+                          victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+              // no pending eviction yet...
+              // No room in the L2, so we need to make room before handling the request
+              Addr victim := L2cache.cacheProbe(in_msg.addr);
+              Entry L2cache_entry := getCacheEntry(victim);
+              // if victim has a partner
+              if ((L2cache.hasNextTag(victim)) || (L2cache.hasPrevTag(victim))) {
+                if (L2cache.hasNextTag(victim)) {
+                  DPRINTF(RubySlicc, "hasNext\n");
+                  // there is a second victim that we need to evict
+                  Addr victim_tail := L2cache.getNextTagAddress(victim);
+                  Entry L2cache_entry_tail := getCacheEntry(victim_tail);
+                  // if victim's partner not in sync state
+                  if (L2cache_entry_tail.CacheState != State:M_sync &&
+                    L2cache_entry_tail.CacheState != State:S_sync &&
+                    L2cache_entry_tail.CacheState != State:SS_sync &&
+                    L2cache_entry_tail.CacheState != State:MT_sync) {
+                    //trigger go into sync
+                    DPRINTF(RubySlicc, "inportRplFlow(vp)1. tag victim's partner(next) going into sync state\n");
+                    trigger(Event:go_to_sync, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                  }
+                  else {
+                    // partner already in sync state
+                    // if I am not in sync state
+                    if (L2cache_entry.CacheState != State:M_sync &&
+                    L2cache_entry.CacheState != State:S_sync &&
+                    L2cache_entry.CacheState != State:SS_sync &&
+                    L2cache_entry.CacheState != State:MT_sync) {
+                      // I should move into sync state
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)2. tag victim going into sync state\n");
+                      trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                    }
+                    // if i am in sync state too
+                    else {
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)3. tag victim's partner(next) evicting\n");
+                      // adding victim as toevict and fill as triggering
+                      L2cache.addPendingEviction(in_msg.addr,victim);
+                      // partner can start deallocating
+                      if (isDirty(L2cache_entry_tail)) {
+                        trigger(Event:L2_Replacement_xor_tag, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_tag,
+                                victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                      }
+                    }
+                  }
+                }
+                else if (L2cache.hasPrevTag(victim)) {
+                  DPRINTF(RubySlicc, "hasPrev\n");
+                  // there is a second victim that we need to evict
+                  Addr victim_prev := L2cache.getPrevTagAddress(victim);
+                  Entry L2cache_entry_prev := getCacheEntry(victim_prev);
+                  // if victim's partner not in sync state
+                  if (L2cache_entry_prev.CacheState != State:M_sync &&
+                    L2cache_entry_prev.CacheState != State:S_sync &&
+                    L2cache_entry_prev.CacheState != State:SS_sync &&
+                    L2cache_entry_prev.CacheState != State:MT_sync) {
+                    //trigger go into sync
+                    DPRINTF(RubySlicc, "inportRplFlow(vp)1. tag victim's partner(prev) going into sync state\n");
+                    trigger(Event:go_to_sync, victim_prev, L2cache_entry_prev, TBEs[victim_prev]);
+                  }
+                  else {
+                    // partner already in sync state
+                    // if I am not in sync state
+                    if (L2cache_entry.CacheState != State:M_sync &&
+                    L2cache_entry.CacheState != State:S_sync &&
+                    L2cache_entry.CacheState != State:SS_sync &&
+                    L2cache_entry.CacheState != State:MT_sync) {
+                      // I should move into sync state
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)2. tag victim going into sync state\n");
+                      trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                    }
+                    // if i am in sync state too
+                    else {
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)3. tag victim's partner(prev) evicting\n");
+                      // adding victim as toevict and fill as triggering
+                      L2cache.addPendingEviction(in_msg.addr,victim);
+                      // partner can start deallocating
+                      if (isDirty(L2cache_entry_prev)) {
+                        trigger(Event:L2_Replacement_xor_tag, victim_prev, L2cache_entry_prev, TBEs[victim_prev]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_tag,
+                                victim_prev, L2cache_entry_prev, TBEs[victim_prev]);
+                      }
+                    }
+                  }
+                }
+              }
+              
+              DPRINTF(RubySlicc, "inportRplFlow(no vp)1. tag victim evicting-victim no partner\n");
+              // no partner or partner gone, i need to deallocate
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+          // =============================== NP L1_GETX/S/INSTR_writecache_xor ===============================
+          else if (ret == Event:L1_GETX_writecache_xor || ret == Event:L1_GETS_writecache_xor || ret == Event:L1_GET_INSTR_writecache_xor) {
+            State state := getState(tbe, cache_entry, in_msg.addr);
+            assert(state == State:NP);
+            if (L2cache.cacheAvail(in_msg.addr) && L2cache.noPendingEviction(in_msg.addr)) {
+              if (L2cache.isPartnerReplBlocked(in_msg.addr)) {
+                DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache_xor): 2.begin main action\n");
+                DPRINTF(RubySlicc, "inportRplFlow-final-b. main action\n");
+                trigger(ret, in_msg.addr, cache_entry, tbe);
+              }
+              else {
+                DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache_xor): begin to select xor candidate\n");
+                Addr cand_addr := L2cache.getXORChoiceAddr(in_msg.addr, in_msg.Requestor);
+                // DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache_xor): xor candidate is at way %d\n", way);
+                Entry cand_entry := getCacheEntry(cand_addr);
+                assert(is_valid(cand_entry));
+                DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache_xor): settupTempLink\n");
+                L2cache.settupTempLink(in_msg.addr,cand_addr);
+                DPRINTF(RubySlicc, "From NP state(L1_GET*_writecache_xor): 1.begin candidate action\n");
+                DPRINTF(RubySlicc, "inportRplFlow-final-a. block replacement partner\n");
+                trigger(Event:Block_Repl, cand_addr, cand_entry, TBEs[cand_addr]);
+              }
+            }
+            else {
+              // if there is a pending evicion (resulting of inportRplFlow3)
+              if (!L2cache.noPendingEviction(in_msg.addr)) {
+                DPRINTF(RubySlicc, "inportRplFlow(vp)4. tag victim evicting-victim had partner\n");
+                Addr victim := L2cache.getPendingEviction(in_msg.addr);
+                Entry L2cache_entry := getCacheEntry(victim);
+                assert(L2cache_entry.CacheState == State:M_sync ||
+                    L2cache_entry.CacheState == State:S_sync ||
+                    L2cache_entry.CacheState == State:SS_sync ||
+                    L2cache_entry.CacheState == State:MT_sync);
+                // victim partner gone, victim need to deallocate
+                if (isDirty(L2cache_entry)) {
+                  trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+                } else {
+                  trigger(Event:L2_Replacement_clean,
+                          victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+              // no pending eviction yet...
+              // No room in the L2, so we need to make room before handling the request
+              Addr victim := L2cache.cacheProbeExcludePartner(in_msg.addr);
+              Entry L2cache_entry := getCacheEntry(victim);
+              // if victim has a partner
+              if ((L2cache.hasNextTag(victim)) || (L2cache.hasPrevTag(victim))) {
+                if (L2cache.hasNextTag(victim)) {
+                  // there is a second victim that we need to evict
+                  Addr victim_tail := L2cache.getNextTagAddress(victim);
+                  Entry L2cache_entry_tail := getCacheEntry(victim_tail);
+                  // if victim's partner not in sync state
+                  if (L2cache_entry_tail.CacheState != State:M_sync &&
+                    L2cache_entry_tail.CacheState != State:S_sync &&
+                    L2cache_entry_tail.CacheState != State:SS_sync &&
+                    L2cache_entry_tail.CacheState != State:MT_sync) {
+                    //trigger go into sync
+                    DPRINTF(RubySlicc, "inportRplFlow(vp)1. tag victim's partner(next) going into sync state\n");
+                    trigger(Event:go_to_sync, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                  }
+                  else {
+                    // partner already in sync state
+                    // if I am not in sync state
+                    if (L2cache_entry.CacheState != State:M_sync &&
+                    L2cache_entry.CacheState != State:S_sync &&
+                    L2cache_entry.CacheState != State:SS_sync &&
+                    L2cache_entry.CacheState != State:MT_sync) {
+                      // I should move into sync state
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)2. tag victim going into sync state\n");
+                      trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                    }
+                    // if i am in sync state too
+                    else {
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)3. tag victim's partner(next) evicting\n");
+                      // adding victim as toevict and fill as triggering
+                      L2cache.addPendingEviction(in_msg.addr,victim);
+                      // partner can start deallocating
+                      if (isDirty(L2cache_entry_tail)) {
+                        trigger(Event:L2_Replacement_xor_tag, victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_tag,
+                                victim_tail, L2cache_entry_tail, TBEs[victim_tail]);
+                      }
+                    }
+                  }
+                }
+                else if (L2cache.hasPrevTag(victim)) {
+                  // there is a second victim that we need to evict
+                  Addr victim_prev := L2cache.getPrevTagAddress(victim);
+                  Entry L2cache_entry_prev := getCacheEntry(victim_prev);
+                  // if victim's partner not in sync state
+                  if (L2cache_entry_prev.CacheState != State:M_sync &&
+                    L2cache_entry_prev.CacheState != State:S_sync &&
+                    L2cache_entry_prev.CacheState != State:SS_sync &&
+                    L2cache_entry_prev.CacheState != State:MT_sync) {
+                    //trigger go into sync
+                    DPRINTF(RubySlicc, "inportRplFlow(vp)1. tag victim's partner(prev) going into sync state\n");
+                    trigger(Event:go_to_sync, victim_prev, L2cache_entry_prev, TBEs[victim_prev]);
+                  }
+                  else {
+                    // partner already in sync state
+                    // if I am not in sync state
+                    if (L2cache_entry.CacheState != State:M_sync &&
+                    L2cache_entry.CacheState != State:S_sync &&
+                    L2cache_entry.CacheState != State:SS_sync &&
+                    L2cache_entry.CacheState != State:MT_sync) {
+                      // I should move into sync state
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)2. tag victim going into sync state\n");
+                      trigger(Event:go_to_sync, victim, L2cache_entry, TBEs[victim]);
+                    }
+                    // if i am in sync state too
+                    else {
+                      DPRINTF(RubySlicc, "inportRplFlow(vp)3. tag victim's partner(prev) evicting\n");
+                      // adding victim as toevict and fill as triggering
+                      L2cache.addPendingEviction(in_msg.addr,victim);
+                      // partner can start deallocating
+                      if (isDirty(L2cache_entry_prev)) {
+                        trigger(Event:L2_Replacement_xor_tag, victim_prev, L2cache_entry_prev, TBEs[victim_prev]);
+                      } else {
+                        trigger(Event:L2_Replacement_clean_xor_tag,
+                                victim_prev, L2cache_entry_prev, TBEs[victim_prev]);
+                      }
+                    }
+                  }
+                }
+              }
+              
+              DPRINTF(RubySlicc, "inportRplFlow(no vp)1. tag victim evicting-normal\n");
+              // no partner, i need to deallocate
+              if (isDirty(L2cache_entry)) {
+                trigger(Event:L2_Replacement, victim, L2cache_entry, TBEs[victim]);
+              } else {
+                trigger(Event:L2_Replacement_clean,
+                        victim, L2cache_entry, TBEs[victim]);
+              }
+            }
+          }
+          else {
+            assert(false);
+          }
+        }
+      }
+    }
+  }
+
+
+  // ACTIONS
+  include "MESI_Two_Level-L2cache-actions.sm";
+
+  //*****************************************************
+  // TRANSITIONS
+  //*****************************************************
+  include "MESI_Two_Level-L2cache-transitions.sm";
+}

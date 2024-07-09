@@ -1,0 +1,15 @@
+protocol "MSI_Two_Level_NINE_XOR_MAP_THESAURUS";
+include "RubySlicc_interfaces.slicc";
+include "MESI_Two_Level-msg.sm";
+include "MESI_Two_Level-L1cache.sm";
+include "MESI_Two_Level-L2cache.sm";
+include "MESI_Two_Level-dir.sm";
+include "MESI_Two_Level-dma.sm";
+
+//protocol "MSI_Two_Level_NINE_XOR_MAP_THESAURUS";
+//include "RubySlicc_interfaces.slicc";
+//include "THESAURUS_MSI_Two_Level-msg.sm";
+//include "THESAURUS_MSI_Two_Level-L1cache.sm";
+//include "THESAURUS_MSI_Two_Level-L2cache.sm";
+//include "THESAURUS_MSI_Two_Level-dir.sm";
+//include "THESAURUS_MSI_Two_Level-dma.sm";

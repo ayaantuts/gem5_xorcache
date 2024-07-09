@@ -1,0 +1,47 @@
+  in_port(L1unblockNetwork_in, ResponseMsg, unblockToL2Cache, rank = 2) {
+    if(L1unblockNetwork_in.isReady(clockEdge())) {
+      peek(L1unblockNetwork_in,  ResponseMsg) {
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+        DPRINTF(RubySlicc, "Addr: %#x State: %s Sender: %s Type: %s Dest: %s\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Sender, in_msg.Type, in_msg.Destination);
+
+        bool is_secondary := L2cache.isSecondaryAddr(in_msg.addr);
+        DPRINTF(RubySlicc, "Addr: %#x, is_secondary: %d, is_valid(cache_entry): %s\n", 
+        in_msg.addr, is_secondary, is_valid(cache_entry));
+
+        assert(in_msg.Destination.isElement(machineID));
+        if (in_msg.Type == CoherenceResponseType:EXCLUSIVE_UNBLOCK) {
+          if (is_secondary) {
+            trigger(Event:Exclusive_Unblock2, in_msg.addr, cache_entry, tbe);
+          } else {
+            trigger(Event:Exclusive_Unblock, in_msg.addr, cache_entry, tbe);
+          }
+        } else if (in_msg.Type == CoherenceResponseType:EXCLUSIVE_UNBLOCK_DATA) {
+        
+          if (is_secondary) {
+            trigger(Event:Exclusive_Unblock_Data2, in_msg.addr, cache_entry, tbe);
+          } else {
+            trigger(Event:Exclusive_Unblock_Data, in_msg.addr, cache_entry, tbe);
+          }
+        } else if (in_msg.Type == CoherenceResponseType:UNBLOCK) {
+          if (is_secondary) {
+            if (is_valid(tbe) && getPendingUBs(tbe) != 1) {
+              trigger(Event:Unblock_not_all2, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Unblock2, in_msg.addr, cache_entry, tbe);
+            }
+          } else {
+            if (is_valid(tbe) && getPendingUBs(tbe) != 1) {
+              trigger(Event:Unblock_not_all, in_msg.addr, cache_entry, tbe);
+            } else {
+              trigger(Event:Unblock, in_msg.addr, cache_entry, tbe);
+            }
+          }
+        } else {
+          error("unknown unblock message");
+        }
+      }
+    }
+  }

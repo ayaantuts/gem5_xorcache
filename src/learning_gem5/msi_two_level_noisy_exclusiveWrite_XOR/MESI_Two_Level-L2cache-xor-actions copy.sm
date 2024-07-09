@@ -1,0 +1,162 @@
+//actions related to triggerQueue
+action(p_popTriggerQueue, "pT", desc="Pop trigger queue") {
+    triggerQueue_in.dequeue(clockEdge());
+}
+action(zt_stallAndWaitTriggerQueue, "zt", desc="stall trigger queue") {
+    stall_and_wait(triggerQueue_in, address);
+}
+
+// actions related to proactive transition
+action(s_schedulePairing, "sch", desc="Schdule partner pairing") {
+    assert(is_valid(cache_entry));
+    assert ((L2cache.hasPartnerFromMap(address)));
+    Addr part := L2cache.getPartnerTagAddressFromMap(address);
+    enqueue(triggerQueue_out, RequestMsg, 0) {
+        out_msg.addr := part;
+        out_msg.Type := CoherenceRequestType:XOR;
+        out_msg.MessageSize := MessageSizeType:Control;
+        DPRINTF(RubySlicc, "schedule to xor %#x at %s\n", part,
+                ticksToCycles(clockEdge()));
+    }
+}
+action(pp_procWriteDataToCache, "pp", desc="Process this incoming data and Write data from response queue to cache") {
+    peek(responseL2Network_in, ResponseMsg) {
+        assert(is_valid(cache_entry));
+        assert ((L2cache.hasPartnerFromMap(address)));
+        Addr part := L2cache.getPartnerTagAddressFromMap(address);
+        // obtain the current data in the cache
+        DataBlock curData := getEntry(part).DataBlk;
+        
+        // xor curData with in_msg.DataBlk
+        DataBlock newData := L2dataProc.preprocess(curData, in_msg.DataBlk);
+
+        // write newData to cache
+        cache_entry.DataBlk := in_msg.DataBlk;
+        if (in_msg.Dirty) {
+            cache_entry.Dirty := in_msg.Dirty;
+        }
+    }
+}
+action(ppp_procWriteDataToPartnerCache, "ppp", desc="Process this incoming data and Write data from response queue to cache. cache is invalid now") {
+    peek(responseL2Network_in, ResponseMsg) {
+        // assert(is_valid(cache_entry));
+        assert ((L2cache.hasPartnerFromMap(address)));
+        Addr part := L2cache.getPartnerTagAddressFromMap(address);
+        // obtain the current data in the cache
+        DataBlock curData := getEntry(part).DataBlk;
+        
+        // xor curData with in_msg.DataBlk
+        DataBlock newData := L2dataProc.preprocess(curData, in_msg.DataBlk);
+
+        // write newData to cache
+        getEntry(part).DataBlk := in_msg.DataBlk;
+        if (in_msg.Dirty) {
+            getEntry(part).Dirty := in_msg.Dirty;
+        }
+    }
+}
+action(ppp_procWriteDataToPartnerCache_req, "pppreq", desc="Process this incoming data and Write data from response queue to cache. cache is invalid now") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+        // assert(is_valid(cache_entry));
+        assert ((L2cache.hasPartnerFromMap(address)));
+        Addr part := L2cache.getPartnerTagAddressFromMap(address);
+        assert(is_valid(getEntry(part)));
+        // obtain the current data in the cache
+        DataBlock curData := getEntry(part).DataBlk;
+        
+        // xor curData with in_msg.DataBlk
+        DataBlock newData := L2dataProc.preprocess(curData, in_msg.DataBlk);
+
+        // write newData to cache
+        getEntry(part).DataBlk := in_msg.DataBlk;
+        if (in_msg.Dirty) {
+            getEntry(part).Dirty := in_msg.Dirty;
+        }
+    }
+}
+
+action(et_sendDataToGetSRequestors_fromTBE, "et", desc="Send data from cache to all GetS IDs from tbe") {
+    assert(is_valid(tbe));
+    assert(tbe.L1_GetS_IDs.count() > 0);
+    enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination := tbe.L1_GetS_IDs;  // internal nodes
+        out_msg.DataBlk := tbe.DataBlk; 
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+    }
+}
+
+// actions related to reactive transition
+action(rm_partner_map, "rmP", desc="remove address from partner") {
+    L2cache.removePartnerFromMap(address); //TODO handle this, currently not called
+}
+
+//actions shared by proactive and reactive transition
+action(set_setXORed, "\setX", desc="set xored") {
+    L2cache.setXORed(address);
+}
+
+action(clear_clearXORed, "\clrX", desc="clear xored") {
+    L2cache.clearXORed(address);
+}
+
+//actions related to sending special request
+
+action(tn_sendSpecialWBNack, "tn", desc="Send special writeback nack") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+        enqueue(responseL2Network_out, ResponseMsg, bypass_latency) {
+            out_msg.addr := address;
+            out_msg.Type := CoherenceResponseType:WB_NACK;
+            out_msg.Sender := machineID;
+            out_msg.Destination.add(in_msg.Requestor);
+            out_msg.MessageSize := MessageSizeType:Response_Control;
+        }
+    }
+}
+
+// action(sps_sendRequestToPartnerSharer, "sps", desc="send request to the partner's sharer") {
+//     enqueue(L1RequestL2Network_out, RequestMsg, dirCache.getDataLatency()) {
+//         assert(is_valid(cache_entry));
+//         out_msg.addr := address;
+//         out_msg.Type := CoherenceRequestType:FETCHXOR;
+//         out_msg.Requestor := machineID;
+//         out_msg.Destination.add(cache_entry.);
+//         out_msg.MessageSize := MessageSizeType:Request_Control;
+//     }
+// }
+
+
+action(a_issueFetchXORToMemory, "aX", desc="fetch data XOR from memory") {
+    enqueue(DirRequestL2Network_out, RequestMsg, dirCache.getTagLatency()+L2cache.getTagLatency()) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceRequestType:FETCHXOR;
+        out_msg.Requestor := machineID;
+        out_msg.Destination.add(mapAddressToMachine(address, MachineType:Directory));
+        out_msg.MessageSize := MessageSizeType:Control;
+        // out_msg.AccessMode := in_msg.AccessMode;
+        // out_msg.Prefetch := false;
+    }
+}
+
+action(su_scheduleUnpairing, "schU", desc="Schdule partner unpairing") {
+    assert ((L2cache.hasPartnerFromMap(address)));
+    Addr part := L2cache.getPartnerTagAddressFromMap(address);
+    enqueue(triggerQueue_out, RequestMsg, 0) {
+        out_msg.addr := part;
+        out_msg.Type := CoherenceRequestType:UNXOR;
+        out_msg.MessageSize := MessageSizeType:Control;
+        DPRINTF(RubySlicc, "schedule to unxor %#x at %s\n", part,
+                ticksToCycles(clockEdge()));
+    }
+}
+
+action(ul_unlink, "ul", desc="unlink") {
+    L2cache.unlinkDataToTag(address);
+}
+
+action(lk_linkToNewData, desc="link") {
+    L2cache.linkDataToTag(address, new Entry);
+}
