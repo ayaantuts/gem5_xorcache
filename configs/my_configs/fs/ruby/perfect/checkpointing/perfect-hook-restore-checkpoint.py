@@ -616,6 +616,7 @@ elif args.protocol == 'msi_nine_xor_bdi_map3':
         l3_num_maptable_set=args.l2_num_maptable_set,
         l3_compression="bdi",
         l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_tagptr_size_in_bit=15, #depends on number of l3 tags
         l3_data_array_regions=args.l2_data_regions,
         record_line_level_entropy=args.record_line_level_entropy,
         xor_folding_scheme=args.xor_folding_scheme,
@@ -668,6 +669,7 @@ elif args.protocol == 'msi_nine_xor_nobdi_map3':
         l3_list_capacity=args.l2_list_capacity,
         l3_num_maptable_set=args.l2_num_maptable_set,
         l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_tagptr_size_in_bit=15, #depends on number of l3 tags
         l3_data_array_regions=args.l2_data_regions,
         record_line_level_entropy=args.record_line_level_entropy,
         xor_folding_scheme=args.xor_folding_scheme,
@@ -719,6 +721,7 @@ elif args.protocol == 'msi_nine_noxor_bdi_map3':
         l3_num_maptable_set=args.l2_num_maptable_set,
         l3_compression="bdi",
         l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_tagptr_size_in_bit=15, #depends on number of l3 tags
         l3_data_array_regions=args.l2_data_regions,
         record_line_level_entropy=args.record_line_level_entropy,
         xor_folding_scheme=args.xor_folding_scheme,
@@ -761,6 +764,7 @@ elif args.protocol == 'msi_nine_noxor_nobdi_map3':
         l3_list_capacity=args.l2_list_capacity,
         l3_num_maptable_set=args.l2_num_maptable_set,
         l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_tagptr_size_in_bit=15, #depends on number of l3 tags
         l3_data_array_regions=args.l2_data_regions,
         record_line_level_entropy=args.record_line_level_entropy,
         xor_folding_scheme=args.xor_folding_scheme,

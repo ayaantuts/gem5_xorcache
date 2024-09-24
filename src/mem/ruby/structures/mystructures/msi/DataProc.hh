@@ -62,6 +62,8 @@ class DataProc : public SimObject
     Cycles m_rev_preproc_latency;
     int m_block_size;
     int m_segment_size_in_byte;
+    int m_tagptr_size_in_bit;
+    int m_tagptr_size_in_byte;
 
   private:
       struct DataProcStats : public statistics::Group
@@ -75,6 +77,7 @@ class DataProc : public SimObject
           statistics::Scalar numDecomp;
           statistics::Scalar numReverseProc;
           statistics::Histogram compSizeinByte;
+          statistics::Histogram compSizeinByteTagptr;
           statistics::Histogram compSizeinByteReal;
           statistics::Scalar numPreproc;
           statistics::Scalar numRevPreproc;

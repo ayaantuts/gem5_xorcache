@@ -17,6 +17,7 @@ class L3Cache(AbstractL2Cache):
         l3_data_lat, l3_tag_lat, dir_data_lat, dir_tag_lat, 
         data_array_rp_policy,
         data_array_segment_size_in_byte,
+        l3_tagptr_size_in_bit,
         data_array_regions,
         search_scope="bank", rank_criteria="random",
         valid_candidate_ct_threshold=0,
@@ -134,6 +135,7 @@ class L3Cache(AbstractL2Cache):
             preprocessing=preproc,
             compress=compression,
             segment_size_in_byte=data_array_segment_size_in_byte,
+            tagptr_size_in_bit=l3_tagptr_size_in_bit,
         )
 
         # self.dmt = RubyDirectMapTable(

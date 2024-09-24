@@ -76,6 +76,7 @@ class MSIThreeLevelNineNoXORMAPCacheHierarchy(
         # l2_dataArrayWay: int,
         l3_transitions_per_cycle:str,
         l3_data_array_segment_size_in_byte,
+        l3_tagptr_size_in_bit,
         l3_data_array_regions,
         l3_data_array_rp_policy: str="random",
         l3_xor_search_scope: str="bank", 
@@ -123,6 +124,7 @@ class MSIThreeLevelNineNoXORMAPCacheHierarchy(
         self._l3_preproc = l3_preproc
         self._l3_data_array_rp_policy = l3_data_array_rp_policy
         self._l3_data_array_segment_size_in_byte = l3_data_array_segment_size_in_byte
+        self._l3_tagptr_size_in_bit = l3_tagptr_size_in_bit
         self._l3_data_array_regions = l3_data_array_regions
         self._record_line_level_entropy = record_line_level_entropy
         self._xor_folding_scheme = xor_folding_scheme
@@ -231,6 +233,7 @@ class MSIThreeLevelNineNoXORMAPCacheHierarchy(
                 valid_candidate_ct_threshold=9999999,#some large numbers
                 data_array_rp_policy=self._l3_data_array_rp_policy,
                 data_array_segment_size_in_byte = self._l3_data_array_segment_size_in_byte,
+                l3_tagptr_size_in_bit = self._l3_tagptr_size_in_bit,
                 data_array_regions = self._l3_data_array_regions,
                 record_line_level_entropy = self._record_line_level_entropy,
                 xor_folding_scheme = self._xor_folding_scheme,

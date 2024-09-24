@@ -26,5 +26,6 @@ class RubyDataProc(SimObject):
     CompressLatency = Param.Cycles(1, "cycles for compression")
     DecompressLatency = Param.Cycles(1, "cycles for decompression")
     segment_size_in_byte = Param.Int(8, "segment size in byte")
+    tagptr_size_in_bit = Param.Int(15, "tagptr size in bit")
 
     ruby_system = Param.RubySystem(Parent.any, "")

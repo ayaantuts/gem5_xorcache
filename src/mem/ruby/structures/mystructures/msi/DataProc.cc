@@ -40,6 +40,7 @@ DataProc::DataProc(const Params &p)
     m_preproc_latency = p.PreprocLatency;
     m_rev_preproc_latency = p.ReversePreprocLatency;
     m_segment_size_in_byte = p.segment_size_in_byte;
+    m_tagptr_size_in_bit = p.tagptr_size_in_bit;
 }
 
 void
@@ -48,6 +49,7 @@ DataProc::init()
     if (m_block_size == 0) {
         m_block_size = RubySystem::getBlockSizeBytes();
     }
+    m_tagptr_size_in_byte = divCeil(m_tagptr_size_in_bit, 8);
 }
 
 DataProc::~DataProc()
@@ -193,7 +195,11 @@ DataProc::compress(DataBlock blk) {
             dataProcStats.numCompressionIntra++;
             int comp_size_bytes = DataProc::peek_compress_intra(blk);
             dataProcStats.compSizeinByte.sample(comp_size_bytes);
-            int num_seg = divCeil(comp_size_bytes, m_segment_size_in_byte);
+
+            int comp_size_bytes_plus_tagptr = comp_size_bytes + m_tagptr_size_in_byte;
+            dataProcStats.compSizeinByteTagptr.sample(comp_size_bytes_plus_tagptr);
+
+            int num_seg = divCeil(comp_size_bytes_plus_tagptr, m_segment_size_in_byte);
             int comp_size_bytes_real = num_seg * m_segment_size_in_byte;
             dataProcStats.compSizeinByteReal.sample(comp_size_bytes_real);
 
@@ -220,7 +226,11 @@ DataProc::compress(DataBlock blk, DataBlock ref) {
             dataProcStats.numCompressionInter++;
             int comp_size_bytes = DataProc::peek_compress_inter(blk, ref);
             dataProcStats.compSizeinByte.sample(comp_size_bytes);
-            int num_seg = divCeil(comp_size_bytes, m_segment_size_in_byte);
+
+            int comp_size_bytes_plus_tagptr = comp_size_bytes + m_tagptr_size_in_byte;
+            dataProcStats.compSizeinByteTagptr.sample(comp_size_bytes_plus_tagptr);
+
+            int num_seg = divCeil(comp_size_bytes_plus_tagptr, m_segment_size_in_byte);
             int comp_size_bytes_real = num_seg * m_segment_size_in_byte;
             dataProcStats.compSizeinByteReal.sample(comp_size_bytes_real);
 
@@ -398,7 +408,8 @@ DataProcStats::DataProcStats(statistics::Group *parent)
       ADD_STAT(numDecomp, "Number of decompression"),
       ADD_STAT(numReverseProc, "Number of reverse preprocessing"),
       ADD_STAT(compSizeinByte, "Compression size distribution"),
-      ADD_STAT(compSizeinByteReal, "Compression size distribution, considering segment size"),
+      ADD_STAT(compSizeinByteTagptr, "Compression size distribution, considering tag ptr"),
+      ADD_STAT(compSizeinByteReal, "Compression size distribution, considering segment size and tag ptr"),
       ADD_STAT(numPreproc, "Number of preprocessing"),
       ADD_STAT(numRevPreproc, "Number of rev preprocessing")
 {
@@ -421,6 +432,10 @@ DataProcStats::DataProcStats(statistics::Group *parent)
         .flags(statistics::nozero);
     
     compSizeinByte
+        .init(16)
+        .flags(statistics::pdf | statistics::nozero | statistics::nonan);
+    
+    compSizeinByteTagptr
         .init(16)
         .flags(statistics::pdf | statistics::nozero | statistics::nonan);
     
