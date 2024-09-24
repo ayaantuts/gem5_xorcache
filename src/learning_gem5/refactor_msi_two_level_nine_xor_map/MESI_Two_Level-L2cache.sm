@@ -9,6 +9,7 @@ structure (CacheMemoryDualAddr, external = "yes") {
   Cycles getDataLatency();
   void profileDemandHit();
   void profileDemandMiss();
+  void profileDemandMissCoherence();
   bool isTagPresent(Addr);
 
   // ============= extra functions to support pairing =============
@@ -189,6 +190,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
 
     // Blocking states
     SS_OR_MT_MB, AccessPermission:Busy, desc="Blocked for L1_GETX from SS OR MT";
+    SS_UB, AccessPermission:Busy, desc="Blocked for L1_GETS from SS";
     // SS_OR_MT_MB_s, AccessPermission:Busy, desc="Blocked for L1_GETX from SS OR MT";
 
     MT_IIB, AccessPermission:Busy, desc="Blocked for L1_GETS from MT, waiting for unblock and data";
@@ -209,18 +211,17 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     SS_SS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
     L2ONLY_SS, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS";
     SS_L2ONLY, AccessPermission:Busy, desc="primary addr is SS, secondary addr is L2ONLY";
+    
     // transient states
     SS_IS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
     L2ONLY_IS, AccessPermission:Busy, desc="L2 idle, got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet";
-    IS_L2ONLY, AccessPermission:Busy, desc="primary got L1_GET_INSTR or multiple L1_GETS, issued memory fetch, have not seen response yet, secondary addr is L2ONLY";
+    MTSB_IS, AccessPermission:Busy, desc="primary addr is MTSB, secondary addr is IS";
+    
     MTSB_L2ONLY, AccessPermission:Busy, desc="primary addr is MTSB, secondary addr is L2ONLY";
     L2ONLY_MTSB, AccessPermission:Busy, desc="secondary addr is MTSB, primary addr is L2ONLY"; //new
     SS_MTSB, AccessPermission:Busy, desc="secondary addr is MTSB, primary addr is ss"; //new
     MTSB_MTSB, AccessPermission:Busy, desc="secondary addr is MTSB, primary addr is MTSB"; //new
-    MTSB_IS, AccessPermission:Busy, desc="primary addr is MTSB, secondary addr is IS";
     MTSB_SS, AccessPermission:Busy, desc="primary addr is MTSB, secondary addr is SS";
-    IS_SS, AccessPermission:Busy, desc="";
-    IS_IS, AccessPermission:Busy, desc="";
     
     L2ONLY_SS_s, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, waiting for PUTSDATA";
     SS_SSMB_s, AccessPermission:Busy, desc="primary addr is SS, secondary addr is SS getting L1_GETX2, waiting for recovery data";
@@ -247,16 +248,27 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     SS_SI_r2, AccessPermission:Busy, desc="primary addr is SS, secondary addr is SS, got replacement secondary, waiting for INVDATA";
     L2ONLY_SI_r2, AccessPermission:Busy, desc="primary addr is L2ONLY, secondary addr is SS, got replacement secondary, waiting for INVDATA";
 
+    //waiting for wbdata for unxor
+    SS_L2ONLY_unxorwbdata1, AccessPermission:Busy, desc="";
+    SS_L2ONLY_unxorwbdata1_ug, AccessPermission:Busy, desc="";
+    SS_L2ONLY_unxorwbdata2, AccessPermission:Busy, desc="";
+    L2ONLY_SS_unxorwbdata1, AccessPermission:Busy, desc="";
+    L2ONLY_SS_unxorwbdata2, AccessPermission:Busy, desc="";
+    L2ONLY_SS_unxorwbdata2_ug, AccessPermission:Busy, desc="";
+    SS_SS_unxorwbdata1, AccessPermission:Busy, desc="";
+    SS_SS_unxorwbdata1_ug, AccessPermission:Busy, desc="";
+    SS_SS_unxorwbdata2, AccessPermission:Busy, desc="";
+    SS_SS_unxorwbdata2_ug, AccessPermission:Busy, desc="";
+    
     //ubs
     SS_SS_UB1, AccessPermission:Busy, desc="Block waiting on unblock1";
     SS_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
-    SS_SS_UB12, AccessPermission:Busy, desc="Block waiting on unblock1 and unblock2";
+    // SS_SS_UB12, AccessPermission:Busy, desc="Block waiting on unblock1 and unblock2";
     L2ONLY_SS_UB1, AccessPermission:Busy, desc="Block waiting on unblock1";
     L2ONLY_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
     SS_L2ONLY_UB1, AccessPermission:Busy, desc="Block waiting on unblock1";
     SS_L2ONLY_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
-    // IS_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
-
+    MTSB_SS_UB2, AccessPermission:Busy, desc="Block waiting on unblock2";
   }
 
   // EVENTS
@@ -271,6 +283,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     L1_GET_INSTR2_pb,            desc="a L1I GET INSTR request for a block maped to us";
     L1_GET_INSTR2_fwd,            desc="a L1I GET INSTR request for a block maped to us";
     L1_GET_INSTR2_recon,            desc="a L1I GET INSTR request for a block maped to us";
+    L1_GET_INSTR2_stall,            desc="a L1I GET INSTR request for a block maped to us";
     L1_GETS,                 desc="a L1D GETS request for a block maped to us";
     L1_GETS_pb,                 desc="a L1D GETS request for a block maped to us";
     L1_GETS_fwd,                 desc="a L1D GETS request for a block maped to us";
@@ -278,16 +291,21 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     L1_GETS2_pb,                 desc="a L1D GETS request for a block maped to us";
     L1_GETS2_fwd,                 desc="a L1D GETS request for a block maped to us";
     L1_GETS2_recon,                 desc="a L1D GETS request for a block maped to us";
+    L1_GETS2_stall,                 desc="a L1D GETS request for a block maped to us";
+
     L1_GETX,                 desc="a L1D GETX request for a block maped to us";
-    L1_GETX_pb,                 desc="a L1D GETX request for a block maped to us";
-    L1_GETX_fwd,                 desc="";
-    L1_GETX_recon,                 desc="";
-    L1_GETX2_pb,                 desc="a L1D GETX request for a block maped to us";
-    L1_GETX2_fwd,                 desc="a L1D GETX request for a block maped to us";
-    L1_GETX2_recon,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX_self,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX_other,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX_stall,                 desc="a L1D GETX request for a block maped to us";
     L1_GETX2,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX2_self,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX2_other,                 desc="a L1D GETX request for a block maped to us";
+    L1_GETX2_stall,                 desc="a L1D GETX request for a block maped to us";
     L1_UPGRADE,                 desc="a L1D GETX request for a block maped to us";
+    L1_UPGRADE_self,                 desc="a L1D GETX request for a block maped to us";
     L1_UPGRADE2,                 desc="a L1D GETX request for a block maped to us";
+    L1_UPGRADE2_self,                 desc="a L1D GETX request for a block maped to us";
+
 
     L1_PUTX,                 desc="L1 replacing data";
     L1_PUTX_not_last,                 desc="L1 replacing data";
@@ -340,6 +358,9 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     Recover_Data2,      desc="recover data (original)";
     // Reconstruct_DataX,      desc="reconstructed data";
     // Reconstruct_DataX2,      desc="reconstructed data";
+
+    UNXORWB_Data,     desc="unxorwb data";
+    UNXORWB_Data2,     desc="unxorwb data";
 
     Unblock, desc="Unblock from L1 requestor";
     Unblock_not_all, desc="Unblock from L1 requestor";
@@ -510,9 +531,9 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
 
   void setCacheEntryState(Entry cache_entry, Addr addr, State state) {
     TBE tbe := TBEs[addr];
+    DPRINTF(RubySlicc, "%s\n", tbe);
     assert(!is_valid(tbe));
     assert(is_valid(cache_entry));
-    DPRINTF(RubySlicc, "%s\n", tbe);
     cache_entry.CacheState := state;
   }
 
@@ -533,6 +554,15 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     return AccessPermission:NotPresent;
   }
 
+  bool isDirty(Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    return cache_entry.Dirty;
+  }
+
+  bool isSecondaryDirty(Entry cache_entry) {
+    assert(is_valid(cache_entry));
+    return cache_entry.Dirty2;
+  }
   include "MESI_Two_Level-L2cache-functions.sm";
 
 
@@ -625,15 +655,6 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     return tbe.pendingUBs;
   }
 
-  bool isDirty(Entry cache_entry) {
-    assert(is_valid(cache_entry));
-    return cache_entry.Dirty;
-  }
-  bool isSecondaryDirty(Entry cache_entry) {
-    assert(is_valid(cache_entry));
-    return cache_entry.Dirty2;
-  }
-
   // ** OUT_PORTS **
 
   out_port(L1RequestL2Network_out, RequestMsg, L1RequestFromL2Cache);
@@ -644,14 +665,13 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
 
   // ** IN_PORTS **
   // Trigger Queue
-  include "MESI_Two_Level-L2cache-triggerQueueInPort.sm";
-
+  include "MESI_Two_Level-L2cache-inport-triggerQueue.sm";
   // unblock
-  include "MESI_Two_Level-L2cache-unblockInPort.sm";
+  include "MESI_Two_Level-L2cache-inport-unblock.sm";
   // L1 Request
-  include "MESI_Two_Level-L2cache-reqInPort.sm";
+  include "MESI_Two_Level-L2cache-inport-req.sm";
   // Response  L2 Network - response msg to this particular L2 bank
-  include "MESI_Two_Level-L2cache-rspInPort.sm";
+  include "MESI_Two_Level-L2cache-inport-rsp.sm";
 
   // ACTIONS
   action(jf_popTriggerQueue_fail, "jf", desc="Pop trigger queue failed.") {
@@ -679,16 +699,6 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   action(cj_clearStallCount, "cj", desc="clear stall count") {
     if (is_valid(cache_entry)) {
       cache_entry.stall_count := 0;
-    }
-  }
-
-  action(ooo_run_xor, "ooo", desc="push to trigger queue to rerun xor algorithm on the singular block") {
-    if (do_xor) {
-      // assert(false);
-      enqueue(triggerQueue_out, TriggerMsg, 0) {
-        out_msg.addr := address;
-        out_msg.enqueTick := clockEdge();
-      }
     }
   }
   action(ooo_run_xor1, "ooo1", desc="push to trigger queue to rerun xor algorithm on the singular block1") {
@@ -1349,6 +1359,10 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     L2cache.profileDemandHit();
   }
 
+  action(uu_profileMissCoh, "uhcoh", desc="Profile the coherence miss") {
+    L2cache.profileDemandMissCoherence();
+  }
+
   action(uua_profileCacheAccess, "\ua", desc="Profile the cache access") {
     L2cache.profileRead();
   }
@@ -1565,14 +1579,15 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   }
 
 
-  transition(NP, L1_GETS,  IS) {
+  transition(NP, L1_GETS, IS) {
     qqB_allocateL2CacheBlock_withBoth;
     ll_clearSharers;
-    nn_addSharer;
+    // nn_addSharer;
     i_allocateTBE;
+    ipu_incrementPendingUBs;
     ss_recordGetSL1ID;
     a_issueFetchToMemory;
-    uu_profileMiss;
+    uu_profileMiss; // l1 read miss, l2 miss (can't service)
     jj_popL1RequestQueue;
 
     uur_profileDirRead;
@@ -1583,11 +1598,12 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   transition(NP, L1_GET_INSTR, IS) {
     qqB_allocateL2CacheBlock_withBoth;
     ll_clearSharers;
-    nn_addSharer;
+    // nn_addSharer;
     i_allocateTBE;
+    ipu_incrementPendingUBs;
     ss_recordGetSL1ID;
     a_issueFetchToMemory;
-    uu_profileMiss;
+    uu_profileMiss; // l1 read miss, l2 miss (can't service)
     jj_popL1RequestQueue;
 
     uur_profileDirRead;
@@ -1602,7 +1618,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     i_allocateTBE;
     xx_recordGetXL1ID;
     a_issueFetchToMemory;
-    uu_profileMiss;
+    uu_profileMiss; // l1 regular (data+permission) write miss, l2 miss (can't service)
     jj_popL1RequestQueue;
 
     uur_profileDirRead;
@@ -1612,16 +1628,16 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
 
 
   // transitions from IS/IM
-  transition(IS, Mem_Data, SS) {
+  transition(IS, Mem_Data, SS_UB) {
     mn_writeBrandNewDataToCache;
     entropy_reg_data;
 
-    dmt_insert;
-    dmtS_insert;
-    e_sendDataToGetSRequestors;
-    s_deallocateTBE;
+    // dmt_insert;
+    // dmtS_insert;
+    e_sendDataToGetSRequestors; // L2HitMissPath:MISS
+    // s_deallocateTBE;
     o_popIncomingResponseQueue;
-    kd_wakeUpDependents;
+    // kd_wakeUpDependents;
 
     uur_profileDirRead;
     uur_profileTagRead;
@@ -1629,20 +1645,21 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     uur_profileDMTRead;
     uua_profileCacheAccess;
   }
+  
 
   transition(IM, Mem_Data, SS_OR_MT_MB) {
     m_writeDataToCache_noData;
-    ee_sendDataToGetXRequestor;
-    s_deallocateTBE;
+    ee_sendDataToGetXRequestor; // L2HitMissPath:MISS
     o_popIncomingResponseQueue;
 
     uur_profileDirRead;
   }
 
   transition({IS}, {L1_GETS, L1_GET_INSTR}, IS) {
-    nn_addSharer;
+    // nn_addSharer;
+    ipu_incrementPendingUBs;
     ss_recordGetSL1ID;
-    uu_profileMiss;
+    uu_profileMiss; // l1 read miss, l2 miss (can't service)
     jj_popL1RequestQueue;
     
     uur_profileDirRead;
@@ -1657,24 +1674,31 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   }
 
   // transitions from SS
-  transition(SS, {L1_GETS, L1_GET_INSTR}) {
-    ds_sendSharedDataToRequestor;
-    nn_addSharer;
+  transition(SS, {L1_GETS, L1_GET_INSTR}, SS_UB) {
+    i_allocateTBE;
+    ipu_incrementPendingUBs;
+    ds_sendSharedDataToRequestor; // L2HitMissPath:DIRECT
+    // nn_addSharer;
+    dmt_rm1;
+    dmtS_rm1;
+    dmtNS_rm1;
+
     set_tagMRU;
     set_dataMRU;
     set_dirMRU;
-    uu_profileHit;
+    uu_profileHit; // l1 read miss, l2 hit
     jj_popL1RequestQueue;
     
     uur_profileDirRead;
   }
 
   transition(SS, L1_GETX, SS_OR_MT_MB) {
+    i_allocateTBE;
     ddt_deallocateTag;
 
     entropy_rm_data;
     ddd_deallocateData;
-    d_sendDataToRequestor;
+    d_sendDataToRequestor; // L2HitMissPath:DIRECT
     ddststs_deallocateSTSTS;
     dmt_rm1;
     dmtS_rm1;
@@ -1683,7 +1707,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     set_tagMRU;
     set_dataMRU;
     set_dirMRU;
-    uu_profileHit;
+    uu_profileHit; //l1 regular(data+permission) write miss, l2 hit
     jj_popL1RequestQueue;
     
     uur_profileDirRead;
@@ -1694,6 +1718,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   }
 
   transition(SS, L1_UPGRADE, SS_OR_MT_MB) {
+    i_allocateTBE;
     ddt_deallocateTag;
 
     entropy_rm_data;
@@ -1705,7 +1730,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     fwm_sendFwdInvToSharersMinusRequestor;
     ts_sendInvAckToUpgrader;
     set_dirMRU;
-    uu_profileHit;
+    uu_profileMissCoh; // l1 coherence(permission) write miss, technically not a l2 hit nor miss
     jj_popL1RequestQueue;
     
     uur_profileDirRead;
@@ -1754,23 +1779,25 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   }
 
 
-  transition(L2ONLY, {L1_GETS, L1_GET_INSTR}, SS) {
+  transition(L2ONLY, {L1_GETS, L1_GET_INSTR}, SS_UB) {
+    i_allocateTBE;
+    ipu_incrementPendingUBs;
+
     aadir_allocateDir;
     ddtns_deallocateTagNS;
     dddns_deallocateDataNS;
     aasts_allocateSingularTagShared;
-    ds_sendSharedDataToRequestor;
-    nn_addSharer;
-    // dmtNS_rm1;
-    // dmt_NSrm_Sadd_1;
+    ds_sendSharedDataToRequestor; // L2HitMissPath:DIRECT
+    // nn_addSharer;
+
     dmt_rm1;
     dmtNS_rm1;
-    dmt_insert_fromCache1;
-    dmtS_insert_fromCache1;
+    // dmt_insert_fromCache1;
+    // dmtS_insert_fromCache1;
 
     set_tagMRU;
     set_dataMRU;
-    uu_profileHit;
+    uu_profileHit; // l1 read miss, l2 hit
     jj_popL1RequestQueue;
 
     uur_profileDirRead;
@@ -1779,6 +1806,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   }
 
   transition(L2ONLY, L1_GETX, SS_OR_MT_MB) {
+    i_allocateTBE;
     aadir_allocateDir;
     ddtns_deallocateTagNS;
     dddns_deallocateDataNS;
@@ -1789,9 +1817,9 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     ddst1_deallocateST;
     dmt_rm1;
     dmtNS_rm1;
-    d_sendDataToRequestor;
+    d_sendDataToRequestor; // L2HitMissPath:DIRECT
     set_tagMRU;
-    uu_profileHit;
+    uu_profileHit; // l1 regular write (data+permission) miss, l2 hit
     jj_popL1RequestQueue;
 
     uur_profileDirRead;
@@ -1841,8 +1869,9 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   // transitions from MT
 
   transition(MT, L1_GETX, SS_OR_MT_MB) {
+    i_allocateTBE;
     b_forwardRequestToExclusive;
-    uu_profileMiss;
+    uu_profileMiss; // l1 regular(data+permission) write miss, l2 coherence miss (shouldn't service)
     set_dirMRU;
     jj_popL1RequestQueue;
 
@@ -1855,7 +1884,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     aad_allocateData;
 
     b_forwardRequestToExclusive;
-    uu_profileMiss;
+    uu_profileMiss; // l1 read miss, l2 coherence miss (shouldn't service)
     set_dirMRU;
     jj_popL1RequestQueue;
 
@@ -1929,6 +1958,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
   }
 
   transition(SS_OR_MT_MB, Exclusive_Unblock, MT) {
+    s_deallocateTBE;
     // update actual directory
     mmu_markExclusiveFromUnblock;
     k_popUnblockQueue;
@@ -1952,10 +1982,10 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     mn_writeBrandNewDataToCache;
     entropy_reg_data;
 
-    dmt_insert;
-    dmtS_insert;
+    // not yet
+    // dmt_insert;
+    // dmtS_insert;
 
-    ooo_run_xor1;
     
     o_popIncomingResponseQueue;
 
@@ -1999,6 +2029,12 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     nnu_addSharerFromUnblock;
     aast_allocateSingularTag;
     aasts_allocateSingularTagShared;
+
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+
+    ooo_run_xor1;
+
     k_popUnblockQueue;
     kd_wakeUpDependents;
 
@@ -2068,7 +2104,87 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache NINE XOR REFACTOR")
     kd_wakeUpDependents;
   }
 
+  transition(SS_UB, Unblock, SS) {
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+    
+    nnu_addSharerFromUnblock;
+
+    dpu_decrementPendingUBs;
+    s_deallocateTBE;
+
+    k_popUnblockQueue;
+    kd_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+    uua_profileCacheAccess;
+  }
+
+  transition(SS_UB, Unblock_not_all) {
+    nnu_addSharerFromUnblock;
+
+    dpu_decrementPendingUBs;
+
+    k_popUnblockQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+    uua_profileCacheAccess;
+  }
+  
+  transition(SS_UB, {L1_GETS, L1_GET_INSTR}) {
+    ipu_incrementPendingUBs;
+
+    ds_sendSharedDataToRequestor; // L2HitMissPath:DIRECT
+
+    set_tagMRU;
+    set_dataMRU;
+    uu_profileHit; // l1 read miss, l2 hit
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uua_profileCacheAccess;
+  }
+
+  transition(SS_UB, {L1_GETX, L1_UPGRADE}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(SS_UB, L1_PUTS_old) {
+    zz_stallAndWaitL1RequestQueue; // may be the new sharer
+  }
+
+  transition(SS_UB, {L1_PUTS_not_last, L1_PUTS_last, L1_PUTX_not_last}) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+  }
+  
+  transition(SS_UB, {L2_Replacement, L2_Replacement_clean}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(SS_UB, MEM_Inv) {
+    zn_recycleResponseNetwork;
+  }
+
   include "MESI_Two_Level-L2cache-transitions.sm";
-  include "MESI_Two_Level-L2cache-transitions-UB.sm";
-  include "MESI_Two_Level-L2cache-transitions-deprecated.sm";
+
+  include "MESI_Two_Level-L2cache-transitions-comp-rerun.sm"; // trantion 3
+  include "MESI_Two_Level-L2cache-transitions-comp-gets.sm"; // transition 1
+  include "MESI_Two_Level-L2cache-transitions-comp-putx.sm"; // transition 2
+
+  include "MESI_Two_Level-L2cache-transitions-decomp-gets.sm"; // transition 4, 5
+  include "MESI_Two_Level-L2cache-transitions-decomp-UB.sm";
+  
+  include "MESI_Two_Level-L2cache-transitions-unxoring-getx.sm"; // transition 6, 7
+  include "MESI_Two_Level-L2cache-transitions-unxoring-putlast.sm"; // transition 8
+  include "MESI_Two_Level-L2cache-transitions-unxoring-eviction.sm"; // transition 9, 10
+
 }

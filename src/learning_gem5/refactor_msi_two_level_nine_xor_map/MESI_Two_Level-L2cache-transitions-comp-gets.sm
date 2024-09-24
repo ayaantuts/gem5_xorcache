@@ -1,0 +1,119 @@
+  // transition 1 in fig 5
+  // response inport run xor algorithm
+  transition(SS_IS, Mem_Data2, SS_SS_UB2) { // already run xor algorithm
+    ml2_writeLogicalDataToCache;
+
+    entropy_rm_xor_data;
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data2;
+
+    mpx_writePhyDataToCache_XOR_compress_update;
+
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    el2_sendLogicalDataToGetSRequestors; // l2 regular miss
+    spu_setPendingUBs;
+
+    // just in case ST has not been deallocated
+    ddststs1_deallocateSTSTS;
+    ddststs_deallocateSTSTS;
+
+    dmt_rm1;
+    dmtS_rm1;
+    dmt_rm2;
+    dmtS_rm2;
+
+    // s_deallocateTBE;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    // kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+
+  // transition(MTSB_IS, Mem_Data2, MTSB_SS_UB2) { // already run xor algorithm
+  //   ml2_writeLogicalDataToCache;
+
+  //   entropy_rm_xor_data;
+  //   entropyRaw_reg_primary_data;
+  //   entropyRaw_reg_secondary_data2;
+
+  //   mpx_writePhyDataToCache_XOR_compress_update;
+  //   entropy_reg_xor_data;
+  //   entropyXOR_reg_xor_data;
+
+  //   el2_sendLogicalDataToGetSRequestors; // l2 regular miss
+  //   spu_setPendingUBs;
+
+  //   // just in case ST has not been deallocated
+  //   // ddststs1_deallocateSTSTS;
+  //   ddststs_deallocateSTSTS;
+  //   dmt_rm1;
+  //   dmtS_rm1;
+  //   dmt_rm2;
+  //   dmtS_rm2;
+
+  //   // s_deallocateTBE;
+  //   o_popIncomingResponseQueue;
+  //   // kd2_wakeUpDependents;
+  //   // kd1_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  //   uur_profileDMTRead;
+  //   uur_profileDMTRead;
+  //   uur_profileTagRead;
+  //   uur_profileDataRead;
+  //   uur_profileDataRead;
+  // }
+
+  // transition(MTSB_SS_UB2, Unblock, SS_SS_UB2) {
+  //   nnu_addSharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   // kd2_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+  
+  transition(L2ONLY_IS, Mem_Data2, L2ONLY_SS_UB2) {  // already run xor algorithm
+    ipu_incrementPendingUBs;
+    ml2_writeLogicalDataToCache;
+
+    entropy_rm_xor_data;
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data2;
+
+    mpx_writePhyDataToCache_XOR_compress_update;
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    el2_sendLogicalDataToGetSRequestors; // l2 regular miss
+    spu_setPendingUBs;
+
+    // just in case ST has not been deallocated
+    ddst1_deallocateST;
+    ddststs_deallocateSTSTS;
+    // dddns1_deallocateDataNS;
+    dmt_rm1;
+    dmtNS_rm1;
+    dmt_rm2;
+    dmtS_rm2;
+
+    // s_deallocateTBE;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    // kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+

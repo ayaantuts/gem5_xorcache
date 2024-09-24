@@ -155,6 +155,7 @@ class MSITwoLevelNineXORMAPCacheHierarchy(
                 cache_line_size,
                 board.processor.get_isa(),
                 board.get_clock_domain(),
+                self._l2_preproc,
             )
 
             cache.sequencer = RubySequencer(

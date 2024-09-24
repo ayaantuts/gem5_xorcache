@@ -1,3 +1,33 @@
+Addr get_partner_addr(Addr addr) {
+  assert (L2cache.isSecondaryAddr(addr) || L2cache.hasSecondaryAddr(addr));
+  if (L2cache.isSecondaryAddr(addr)) {
+    return L2cache.getPrimaryAddr(addr);
+  } else {
+    return L2cache.getSecondaryAddr(addr);
+  }
+}
+
+Event basic_replacement(Addr victim) {
+  Entry L2cache_entry := getCacheEntry(victim);
+  Event toTrigger := Event:L2_Replacement;
+
+  if (L2cache.isSecondaryAddr(victim)) {
+    if (isSecondaryDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement2;
+    } 
+    else {
+      toTrigger := Event:L2_Replacement_clean2;
+    }
+  } else {
+    if (isDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement;
+    } 
+    else {
+      toTrigger := Event:L2_Replacement_clean;
+    }
+  }
+  return toTrigger;
+}
 
 DataBlock getDataBlockLogical(Addr addr){
     TBE tbe := TBEs[addr];
@@ -32,7 +62,8 @@ Event L1Cache_request_type_to_event(CoherenceRequestType type, Addr addr,
             DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback nor fwd\n");
             return Event:L1_GETS2_recon;
         } else {
-            error("<function L1Cache_request_type_to_event> both AB no sharer\n");
+            DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> L1_GETS2 %llx both AB no sharer\n", addr);   
+            return Event:L1_GETS2_stall;
         }
         } else {
         if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
@@ -57,7 +88,8 @@ Event L1Cache_request_type_to_event(CoherenceRequestType type, Addr addr,
             DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback nor fwd, sharer2=%s, sharer1=%s\n",cache_entry.Sharers2,cache_entry.Sharers);
             return Event:L1_GET_INSTR2_recon;
         } else {
-            error("<function L1Cache_request_type_to_event> both AB no sharer\n");
+            DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> L1_GET_INSTR2 %llx both AB no sharer\n", addr);   
+            return Event:L1_GET_INSTR2_stall;
         }
         } else {
         if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
@@ -73,72 +105,56 @@ Event L1Cache_request_type_to_event(CoherenceRequestType type, Addr addr,
         }
     } else if (type == CoherenceRequestType:GETX) {
         if (L2cache.isSecondaryAddr(addr)) {
-            if (is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor)) {
-                return Event:L1_GETX2_pb;
-            } else if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
-                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback sharers are %s\n",cache_entry.Sharers);
-                return Event:L1_GETX2_fwd;
+            if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
+                return Event:L1_GETX2_self; // trnasition 6 in fig 5
             } else if (is_valid(cache_entry) && cache_entry.Sharers.count() > 0) {
-                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback nor fwd\n");
-                return Event:L1_GETX2_recon;
+                return Event:L1_GETX2_other; // trnasition 7 in fig 5
             } else {
-                error("<function L1Cache_request_type_to_event> both AB no sharer\n");
+                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> GETX2 %llx both AB no sharer\n", addr);   
+                return Event:L1_GETX2_stall;
+            }
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr)) {
+            if (cache_entry.Sharers.count() > 0) {
+                return Event:L1_GETX_self; // trnasition 6 in fig 5
+            } else if (cache_entry.Sharers2.count() > 0) {
+                return Event:L1_GETX_other; // trnasition 7 in fig 5
+            } else {
+                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> GETX1 %llx both AB no sharer\n", addr);   
+                return Event:L1_GETX_stall;
             }
         } else {
-            if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
-                return Event:L1_GETX_pb;
-            } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers.count() > 0) {
-                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback sharers are %s\n",cache_entry.Sharers2);
-                return Event:L1_GETX_fwd;
-            } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.count() > 0) {
-                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback nor fwd\n");
-                return Event:L1_GETX_recon;
-            } else {
-                if (is_valid(cache_entry)) {
-                assert(!L2cache.hasSecondaryAddr(addr));
-                }
-                return Event:L1_GETX;
-            }
+            return Event:L1_GETX;
         }
     } else if (type == CoherenceRequestType:UPGRADE) {
         if (L2cache.isSecondaryAddr(addr)) {
             if ( is_valid(cache_entry) && cache_entry.Sharers2.isElement(requestor) ) {
-                // error("L1_UPGRADE2: detected!");
-                return Event:L1_UPGRADE2;
+                return Event:L1_UPGRADE2_self; // trnasition 6 in fig 5
             } else {
-                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> got update request but requstor no long has data!\n");
-                if (is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor)) {
-                    return Event:L1_GETX2_pb;
-                } else if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
-                    DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback sharers are %s\n",cache_entry.Sharers);
-                    return Event:L1_GETX2_fwd;
+                if (is_valid(cache_entry) && cache_entry.Sharers2.count() > 0) {
+                    return Event:L1_GETX2_self; // trnasition 6 in fig 5
                 } else if (is_valid(cache_entry) && cache_entry.Sharers.count() > 0) {
-                    DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback nor fwd\n");
-                    return Event:L1_GETX2_recon;
+                    return Event:L1_GETX2_other; // trnasition 7 in fig 5
                 } else {
-                    error("<function L1Cache_request_type_to_event> both AB no sharer\n");
+                    error("<function L1Cache_request_type_to_event> GETX2 (UPGRADE2) both AB no sharer\n");
+                }
+            }
+        } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr)) {
+            if (cache_entry.Sharers.isElement(requestor) ) {
+                return Event:L1_UPGRADE_self; // trnasition 6 in fig 5
+            } else {
+                if (cache_entry.Sharers.count() > 0) {
+                    return Event:L1_GETX_self; // trnasition 6 in fig 5
+                } else if (cache_entry.Sharers2.count() > 0) {
+                    return Event:L1_GETX_other; // trnasition 7 in fig 5
+                } else {
+                    error("<function L1Cache_request_type_to_event> GETX1 (UPGRADE1) both AB no sharer\n");
                 }
             }
         } else {
             if ( is_valid(cache_entry) && cache_entry.Sharers.isElement(requestor) ) {
-                // error("L1_UPGRADE: detected!");
                 return Event:L1_UPGRADE;
             } else {
-                DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> got update request but requstor no long has data!\n");
-                if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.isElement(requestor)) {
-                    return Event:L1_GETX_pb;
-                } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers.count() > 0) {
-                    DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback sharers are %s\n",cache_entry.Sharers2);
-                    return Event:L1_GETX_fwd;
-                } else if (is_valid(cache_entry) && L2cache.hasSecondaryAddr(addr) && cache_entry.Sharers2.count() > 0) {
-                    DPRINTF(RubySlicc, "<function L1Cache_request_type_to_event> cannot piggyback nor fwd\n");
-                    return Event:L1_GETX_recon;
-                } else {
-                    if (is_valid(cache_entry)) {
-                        assert(!L2cache.hasSecondaryAddr(addr));
-                    }
-                    return Event:L1_GETX;
-                }
+                return Event:L1_GETX;
             }
         }
     } else if (type == CoherenceRequestType:PUTX) {
@@ -171,29 +187,29 @@ Event L1Cache_request_type_to_event(CoherenceRequestType type, Addr addr,
         }
         }
         if (is_valid(cache_entry)) {
-        if (L2cache.isSecondaryAddr(addr)) {
-            if (isSecondarySharer(addr, requestor, cache_entry)) {
-            if (cache_entry.Sharers2.count() == 1) {
-                return Event:L1_PUTS_last2;
+            if (L2cache.isSecondaryAddr(addr)) {
+                if (isSecondarySharer(addr, requestor, cache_entry)) {
+                if (cache_entry.Sharers2.count() == 1) {
+                    return Event:L1_PUTS_last2;
+                } else {
+                    return Event:L1_PUTS_not_last2;
+                }
+                }
+                else { // no longer a sharer
+                return Event:L1_PUTS_old2;
+                }
             } else {
-                return Event:L1_PUTS_not_last2;
+                if (isSharer(addr, requestor, cache_entry)) {
+                if (cache_entry.Sharers.count() == 1) {
+                    return Event:L1_PUTS_last;
+                } else {
+                    return Event:L1_PUTS_not_last;
+                }
+                }
+                else { // no longer a sharer
+                return Event:L1_PUTS_old;
+                }
             }
-            }
-            else { // no longer a sharer
-            return Event:L1_PUTS_old2;
-            }
-        } else {
-            if (isSharer(addr, requestor, cache_entry)) {
-            if (cache_entry.Sharers.count() == 1) {
-                return Event:L1_PUTS_last;
-            } else {
-                return Event:L1_PUTS_not_last;
-            }
-            }
-            else { // no longer a sharer
-            return Event:L1_PUTS_old;
-            }
-        }
         } else {
         return Event:L1_PUTS_old;
         }
@@ -270,13 +286,7 @@ State getState1(Entry cache_entry, TBE tbe1, Addr addr1) {
     return tbe1.TBEState;
   } else if (is_valid(cache_entry)) {
     if (L2cache.hasSecondaryAddr(addr1)) {
-      if ((cache_entry.CacheState == State:IS_L2ONLY) ||
-        (cache_entry.CacheState == State:IS_SS) ||
-        (cache_entry.CacheState == State:IS_IS)) {
-        DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: IS\n", addr1, cache_entry.CacheState);
-        return State:IS;
-      }
-      else if ((cache_entry.CacheState == State:L2ONLY_SS) ||
+      if ((cache_entry.CacheState == State:L2ONLY_SS) ||
         (cache_entry.CacheState == State:L2ONLY_MTSB) ||
         (cache_entry.CacheState == State:L2ONLY_IS) ||
         (cache_entry.CacheState == State:L2ONLY_SS_s) ||
@@ -298,7 +308,7 @@ State getState1(Entry cache_entry, TBE tbe1, Addr addr1) {
         (cache_entry.CacheState == State:SS_SI_r2) ||
         (cache_entry.CacheState == State:SS_SS_UB1) ||
         (cache_entry.CacheState == State:SS_SS_UB2) ||
-        (cache_entry.CacheState == State:SS_SS_UB12) ||
+        // (cache_entry.CacheState == State:SS_SS_UB12) ||
         (cache_entry.CacheState == State:SS_L2ONLY_UB1) ||
         (cache_entry.CacheState == State:SS_L2ONLY_UB2)) {
         DPRINTF(RubySlicc, "getState1: addr1: %#x, %s: SS\n", addr1, cache_entry.CacheState);
@@ -354,13 +364,11 @@ State getState2(Entry cache_entry, TBE tbe2, Addr addr2) {
     if (L2cache.hasSecondaryAddr(addr2)) {
       if ((cache_entry.CacheState == State:SS_IS) ||
         (cache_entry.CacheState == State:L2ONLY_IS) ||
-        (cache_entry.CacheState == State:MTSB_IS) ||
-        (cache_entry.CacheState == State:IS_IS)) {
+        (cache_entry.CacheState == State:MTSB_IS)) {
         DPRINTF(RubySlicc, "getState1: addr2: %#x, %s: IS\n", addr2, cache_entry.CacheState);
         return State:IS;
       }
       else if ((cache_entry.CacheState == State:SS_L2ONLY) ||
-        (cache_entry.CacheState == State:IS_L2ONLY) ||
         (cache_entry.CacheState == State:MTSB_L2ONLY) ||
         (cache_entry.CacheState == State:SSMB_L2ONLY_s) ||
         (cache_entry.CacheState == State:SS_L2ONLY_r2) ||
@@ -375,16 +383,16 @@ State getState2(Entry cache_entry, TBE tbe2, Addr addr2) {
       }
       else if ((cache_entry.CacheState == State:SS_SS) ||
         (cache_entry.CacheState == State:L2ONLY_SS) ||
-        (cache_entry.CacheState == State:IS_SS) ||
         (cache_entry.CacheState == State:L2ONLY_SS_s) ||
         (cache_entry.CacheState == State:SSMB_SS_s) ||
         (cache_entry.CacheState == State:L2ONLY_SS_r1) ||
         (cache_entry.CacheState == State:SI_SS_r1) ||
         (cache_entry.CacheState == State:SS_SS_UB1) ||
         (cache_entry.CacheState == State:SS_SS_UB2) ||
-        (cache_entry.CacheState == State:SS_SS_UB12) ||
+        // (cache_entry.CacheState == State:SS_SS_UB12) ||
         (cache_entry.CacheState == State:L2ONLY_SS_UB1) ||
         (cache_entry.CacheState == State:L2ONLY_SS_UB2) ||
+        (cache_entry.CacheState == State:MTSB_SS_UB2) ||
         (cache_entry.CacheState == State:MTSB_SS)) {
         DPRINTF(RubySlicc, "getState2: addr2: %#x, %s: SS\n", addr2, cache_entry.CacheState);
         return State:SS;
@@ -452,7 +460,8 @@ bool is_in_or_moving_to_M_state(State curState) {
 
 bool is_stalling_state(State curState) {
     if (curState == State:SS_s || curState == State:I_I_s || curState == State:I_I_sm ||
-        curState == State:S_I_s || curState == State:L2ONLY_s) {
+        curState == State:S_I_s || curState == State:L2ONLY_s ||
+        curState == State:SS_UB) {
         return true;
     }
     return false;

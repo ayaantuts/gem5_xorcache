@@ -35,7 +35,7 @@ enumeration(CoherenceRequestType, desc="...") {
   GETS,      desc="Get Shared";
   GET_INSTR, desc="Get Instruction";
   INV,       desc="INValidate";
-  INVDATA,       desc="INValidate, send data back";
+  INVDATA,       desc="INValidate, should send data back to either L2 or writer";
   PUTX,      desc="Replacement message, M state";
   PUTS,      desc="Replacement message, S state";
 
@@ -49,6 +49,7 @@ enumeration(CoherenceRequestType, desc="...") {
 enumeration(CoherenceResponseType, desc="...") {
   MEMORY_ACK, desc="Ack from memory controller";
   DATA, desc="Data block for L1 cache in S state";
+  DATAS, desc="Data block for L1 cache in S state";
   DIRTY, desc="dirty bit";
   // DATA_EXCLUSIVE, desc="Data block for L1 cache in M/E state";
   MEMORY_DATA, desc="Data block from / to main memory";

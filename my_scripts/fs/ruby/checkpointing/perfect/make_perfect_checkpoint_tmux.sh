@@ -7,11 +7,11 @@
 
 
 declare -a bench=(
-    "2d_convolution"
-    "dwt53"
-    "histogram_equalization"
-    "change-detection"
-    "debayer"
+    # "2d_convolution"
+    # "dwt53"
+    # "histogram_equalization"
+    # "change-detection"
+    # "debayer"
     "lucas-kanade"
 )
 
@@ -21,13 +21,15 @@ declare -a protocol=(
 
 SET="ser"
 CORE="1"
+# SET="omp"
+# CORE="4"
 
 KERNELARG=""
 # KERNELARG="--kernel_args memmap=512K@1M"
 
-# SET="omp"
-# CORE="4"
 
+DISASSEMBLEARG=""
+DISASSEMBLEARG="--disassemble 1"
 
 for PROT in "${protocol[@]}"
 do
@@ -44,6 +46,7 @@ do
             --set ${SET} \
             --core ${CORE} \
             ${KERNELARG} \
+            ${DISASSEMBLEARG} \
             --protocol $PROT" C-m
         else
             echo "$BEN"
@@ -53,6 +56,7 @@ do
             --set ${SET} \
             --core ${CORE} \
             ${KERNELARG} \
+            ${DISASSEMBLEARG} \
             --protocol $PROT" C-m
         fi
     done

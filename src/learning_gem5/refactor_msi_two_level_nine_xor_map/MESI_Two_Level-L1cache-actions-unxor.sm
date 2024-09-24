@@ -1,0 +1,29 @@
+  action(sendUnxorwbdata, "unxorwbdata", desc="send unxor wbdata to the L2 cache") {
+    enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:DATA_UNXORWB;
+      out_msg.Sender := machineID;
+      out_msg.Destination.add(mapAddressToRange(address, MachineType:L2Cache,
+                        l2_select_low_bit, l2_select_num_bits, intToID(0)));
+      out_msg.MessageSize := MessageSizeType:Response_Data;
+      out_msg.DataBlk := cache_entry.DataBlk;
+      out_msg.Dirty := cache_entry.Dirty;
+      DPRINTF(RubySlicc, "sendUnxorwbdata: %llx, dirty %d, DATA_UNXORWB %s\n", 
+        out_msg.addr, out_msg.Dirty, out_msg.DataBlk);
+    }
+  }
+  action(sendUnxorwbdata_fromTBE, "unxorwbdataT", desc="send unxor wbdata to the L2 cache") {
+    enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+      out_msg.addr := address;
+      out_msg.Type := CoherenceResponseType:DATA_UNXORWB;
+      out_msg.Sender := machineID;
+      out_msg.Destination.add(mapAddressToRange(address, MachineType:L2Cache,
+                        l2_select_low_bit, l2_select_num_bits, intToID(0)));
+      out_msg.MessageSize := MessageSizeType:Response_Data;
+      out_msg.DataBlk := tbe.DataBlk;
+      out_msg.Dirty := tbe.Dirty;
+      DPRINTF(RubySlicc, "sendUnxorwbdata: %llx, dirty %d, DATA_UNXORWB %s\n", 
+        out_msg.addr, out_msg.Dirty, out_msg.DataBlk);
+    }
+  }
+  

@@ -1,0 +1,331 @@
+// %%%%%%%%%%%%%%%%%%%%%% internal %%%%%%%%%%%%%%%%%%%%%%
+// ==== PUT ====
+  // ss_ss
+  transition(SS_SS, L1_PUTS_last, L2ONLY_SS) { 
+    // nothing changes entropy
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTS_last2, SS_L2ONLY) { 
+    // nothing changes entropy
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    lls_clearSecondarySharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTX_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTX, L2ONLY_SS) { //NOTE: It's possible to receive old PUTX at SS state
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    ll_clearSharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTX2, SS_L2ONLY) { //NOTE: It's possible to receive old PUTX at SS state
+    dddir2_deallocateDir;
+    aatns_allocateTagNS;
+    lls_clearSecondarySharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L1_PUTX_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+
+
+  // ss_mtsb
+  transition(SS_MTSB, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+
+  //mtsb_ss
+  transition(MTSB_SS, {L1_PUTS_not_last2, L1_PUTX_not_last2}) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(MTSB_SS, L1_PUTS_last2, MTSB_L2ONLY) {
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    lls_clearSecondarySharers;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(MTSB_SS, L1_PUTX_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  // ss_l2only
+  transition(SS_L2ONLY, L1_PUTS_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY, L1_PUTX_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  // mtsb_l2only
+  transition(MTSB_L2ONLY, L1_PUTX_not_last) {
+    l_removeSharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  // l2only_ss
+  transition(L2ONLY_SS, L1_PUTS_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS, L1_PUTX_not_last2) {
+    l2_removeSecondarySharer;
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+
+
+
+// %%%%%%%%%%%%%%%%%%%%%% stalling %%%%%%%%%%%%%%%%%%%%%%
+  // repl
+  transition({L2ONLY_SS_s, L2ONLY_SS_r1, L2ONLY_SI_r2, L2ONLY_SSMB_s, SS_SSMB_s, SSMB_L2ONLY_s, SSMB_SS_s
+    SS_L2ONLY_s, SS_L2ONLY_r2, L2ONLY_MTSB, SS_MTSB
+    SI_SS_r1, SS_SI_r2, L2ONLY_SI_dd, L2ONLY_II_dc, II_L2ONLY_cd, SI_L2ONLY_dc, SI_MI_dc,
+    SI_L2ONLY_r1, SI_L2ONLY_dd}, 
+    {L2_Replacement, L2_Replacement_clean, 
+    L2_Replacement2, L2_Replacement_clean2, 
+    L2_Replacement_data_dirty_dirty, L2_Replacement_data_clean_clean,
+    L2_Replacement_data_clean_dirty, L2_Replacement_data_dirty_clean}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({L2ONLY_SS_s, L2ONLY_SS_r1, L2ONLY_SI_r2, L2ONLY_SSMB_s, SS_SSMB_s, SSMB_L2ONLY_s, SSMB_SS_s
+    SS_L2ONLY_s, SS_L2ONLY_r2, L2ONLY_MTSB,
+    SI_SS_r1, SS_SI_r2, L2ONLY_SI_dd, L2ONLY_II_dc, II_L2ONLY_cd, SI_L2ONLY_dc, SI_MI_dc,
+    SI_L2ONLY_r1, SI_L2ONLY_dd}, 
+    {MEM_Inv, MEM_Inv2}) {
+    zn_recycleResponseNetwork;
+  }
+
+  transition({MTSB_SS, MTSB_L2ONLY}, {L2_Replacement_data_dirty_clean, L2_Replacement_data_dirty_dirty, 
+    L2_Replacement_data_clean_clean, L2_Replacement_data_clean_dirty}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({MTSB_SS}, {L2_Replacement_clean, L2_Replacement}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({MTSB_L2ONLY,MTSB_SS}, {L2_Replacement_clean2, L2_Replacement2}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+
+  transition({MTSB_SS, MTSB_L2ONLY}, {MEM_Inv}) {
+    zn_recycleResponseNetwork;
+  }
+  
+  // put
+  transition({L2ONLY_SI_dd, L2ONLY_II_dc, II_L2ONLY_cd, SI_L2ONLY_dc, SI_L2ONLY_dd, SI_SI_dd, SI_II_dc, II_SI_cd, SI_MI_dc, SI_MI_dd, II_MI_cd, 
+    SI_L2ONLY_r1, SI_SS_r1, L2ONLY_SS_r1, L2ONLY_SI_r2, SS_L2ONLY_r2, SS_SI_r2, SSMB_SS_s, SS_SSMB_s, SS_L2ONLY_s, L2ONLY_SS_s, SSMB_L2ONLY_s, L2ONLY_SSMB_s,
+    L2ONLY_MTSB,MTSB_MTSB}, 
+    {L1_PUTS_last, L1_PUTS_last2, L1_PUTS_not_last,L1_PUTS_not_last2}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition(SS_MTSB, L1_PUTS_last2) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({SS_MTSB}, {L1_PUTS_last}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({SS_L2ONLY,L2ONLY_SS, SS_SS}, L1_PUTS_old) {
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+  transition({L2ONLY_SS, SS_SS}, L1_PUTS_old2) {
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+  }
+  transition({L2ONLY_MTSB}, L1_PUTS_old2) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({MTSB_SS,MTSB_L2ONLY}, L1_PUTS_last) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  
+  transition({L2ONLY_SS_s, SS_L2ONLY_s, SSMB_SS_s, SS_SSMB_s, L2ONLY_SSMB_s, SSMB_L2ONLY_s,
+    SI_L2ONLY_dd, SI_L2ONLY_dc, SI_SI_dd, SI_MI_dd, SI_MI_dc, SI_II_dc,
+    II_L2ONLY_cd, II_SI_cd, L2ONLY_SI_dd, L2ONLY_II_dc, II_MI_cd,
+    SS_L2ONLY_r2, SI_SS_r1, SS_SI_r2,SI_L2ONLY_r1,L2ONLY_SI_r2,L2ONLY_SS_r1}, 
+    {L1_PUTX_not_last, L1_PUTX_not_last2}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({L2ONLY_SSMB_s, SS_SSMB_s,L2ONLY_MTSB,SS_MTSB,L2ONLY_SS_s,L2ONLY_SS_r1}, L1_PUTX2) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({L2ONLY_SS, SS_L2ONLY, SS_SS}, L1_PUTX_old) {
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+  }
+
+  transition({SSMB_SS_s, SSMB_L2ONLY_s, SI_L2ONLY_dd,MTSB_L2ONLY,MTSB_SS}, L1_PUTX) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({MTSB_L2ONLY,MTSB_SS,
+    SSMB_L2ONLY_s, SSMB_SS_s, SS_SSMB_s,L2ONLY_SSMB_s,SS_L2ONLY_s,L2ONLY_SS_s,
+    S_I_s, L2ONLY_s,I_I_s,SS_s,
+    SI_L2ONLY_r1, L2ONLY_SS_r1, SI_SS_r1,
+    SS_L2ONLY_r2, SS_SI_r2, L2ONLY_SI_r2}, {L1_PUTX_old}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+
+  // get
+
+  transition({MTSB_SS,SS_MTSB}, {L1_GETS_pb, L1_GET_INSTR_pb, L1_GETS_fwd, L1_GET_INSTR_fwd,
+    L1_GETS2_pb, L1_GET_INSTR2_pb, L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(MTSB_L2ONLY, {L1_GETS_fwd, L1_GET_INSTR_fwd,
+    L1_GET_INSTR2_recon, L1_GETS2_recon, L1_GETS2_pb, L1_GET_INSTR2_pb}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+
+  transition(L2ONLY_SS_r1, {L1_GETS_pb, L1_GET_INSTR_pb, L1_GETS_recon, L1_GET_INSTR_recon}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(L2ONLY_SS_r1, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  
+
+  transition({SS_L2ONLY_s, L2ONLY_SSMB_s, SSMB_SS_s, SS_SSMB_s, SS_L2ONLY_r2, SI_SS_r1, SS_SI_r2, SI_L2ONLY_r1, L2ONLY_SS_s, L2ONLY_SI_r2, SSMB_L2ONLY_s,
+    L2ONLY_II_dc, SI_L2ONLY_dd, L2ONLY_SI_dd, II_L2ONLY_cd, SI_L2ONLY_dc, SI_II_dc, SI_SI_dd, II_SI_cd, SI_MI_dd, SI_MI_dc, II_MI_cd, 
+    L2ONLY_MTSB}, 
+   {L1_GETS_pb, L1_GET_INSTR_pb, L1_GETS_fwd, L1_GET_INSTR_fwd, L1_GETS2_pb, L1_GET_INSTR2_pb, L1_GETS2_fwd, L1_GET_INSTR2_fwd,
+    L1_GETS_recon, L1_GET_INSTR_recon, L1_GETS2_recon, L1_GET_INSTR2_recon}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  
+
+  //singular states
+  transition(SS_s, {L1_GETS_lifted, L1_GET_INSTR_lifted, L1_UPGRADE, L1_GETX, L2_Replacement, L2_Replacement_clean, 
+    L1_PUTS_last, L1_PUTS_last2, L1_PUTS_not_last,L1_PUTS_not_last2, L1_PUTX_not_last, L1_PUTX}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(L2ONLY_s, {L1_GETS_lifted, L1_GET_INSTR_lifted, L1_GETX,
+    L2_Replacement, L2_Replacement_clean, L1_PUTS_last, L1_PUTS_last2, L1_PUTS_not_last,L1_PUTS_not_last2}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({I_I_s, I_I_sm, S_I_s}, {L1_GETS_lifted, L1_GET_INSTR_lifted, L1_PUTS_old, L1_GETX}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  
+  transition({SS_s, L2ONLY_s, I_I_s, I_I_sm, S_I_s}, MEM_Inv) {
+    zn_recycleResponseNetwork;
+  }
+
+
+

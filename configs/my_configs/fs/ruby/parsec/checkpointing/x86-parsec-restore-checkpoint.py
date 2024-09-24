@@ -86,7 +86,7 @@ parser.add_argument(
     required=False,
     default="256kB",
     help="l2size string",
-    choices=["32kB", "64kB", "128kB","256kB","512kB", "1024kB", "2048kB"],
+    choices=["32kB", "64kB", "128kB","256kB","512kB", "1024kB", "1408kB", "2048kB"],
 )
 parser.add_argument(
     "--l2factor_xor_bdi",
@@ -181,6 +181,8 @@ parser.add_argument(
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
              "msi_exc_nobdi", "msi_exc_bdi",
+             "mesi2_inc_nobdi", "mesi2_inc_bdi",
+             "msi_nine_noxor_nobdi_map3", "msi_nine_xor_bdi_map3", "msi_nine_noxor_bdi_map3", "msi_nine_xor_nobdi_map3",
              ],
     required=True,
 )
@@ -239,24 +241,27 @@ print("numTag_tot=", numTag_tot)
 
 if args.anonymous_latency:
     l2_data_lat_map = { #TODO
-        16: 5,
-        32: 5,
-        64: 5,
-        128: 5,
-        256: 5,
-        512: 5,
-        1024: 5,
-        2048: 5,
+        16: 10,
+        32: 10,
+        64: 10,
+        128: 10,
+        256: 10,
+        512: 10,
+        704: 10,
+        1024: 10,
+        1408: 10,
+        2048: 10,
     }
     l2_tag_lat_map = { #TODO
-        16: 1,
-        32: 1,
-        64: 1,
-        128: 1,
-        256: 1,
-        512: 1,
-        1024: 1,
-        2048: 1,
+        16: 2,
+        32: 2,
+        64: 2,
+        128: 2,
+        256: 2,
+        512: 2,
+        1024: 2,
+        1408: 2,
+        2048: 2,
     }
     dir_data_lat_map = { #TODO
         16: 2,
@@ -266,6 +271,7 @@ if args.anonymous_latency:
         256: 2,
         512: 2,
         1024: 2,
+        1408: 2,
         2048: 2,
     }
     dir_tag_lat_map = { #TODO
@@ -276,6 +282,7 @@ if args.anonymous_latency:
         256: 2,
         512: 2,
         1024: 2,
+        1408: 2,
         2048: 2,
     }
 else:
@@ -354,6 +361,7 @@ elif args.protocol == 'msi_nine':
         dir_cache_assoc=8,
         dir_l2_total_size=f"{2*l2size_in_kb}kB",#in KB
     )
+
 elif args.protocol == 'msi_nine_xor_bdi_map':
     requires(
         isa_required=ISA.X86,
@@ -535,6 +543,205 @@ elif args.protocol == 'msi_nine_noxor_nobdi_map':
         xor_folding_scheme=args.xor_folding_scheme,
         l2_transitions_per_cycle=args.l2_transitions_per_cycle,
     )
+
+elif args.protocol == 'msi_nine_xor_bdi_map3':
+    requires(
+        isa_required=ISA.X86,
+        coherence_protocol_required=CoherenceProtocol.MSI_THREE_LEVEL_NINE_XOR_MAP,
+        kvm_required=False,
+    )
+
+    from gem5.components.cachehierarchies.ruby.msi_three_level_cache_hierarchy_nine_xor_map import (
+        MSIThreeLevelNineXORMAPCacheHierarchy,
+    )
+    l3size_in_kb = int(args.l2size.split('kB')[0])
+    l3_sector_number = 64*l3size_in_kb
+    l3_sector_number = int(math.floor(l3_sector_number / args.l2factor_xor_bdi))
+    
+    if l3size_in_kb == 1408 and args.l2factor_xor_bdi == 1.5:
+        l3_sector_number = 60096
+    if l3size_in_kb == 1408 and args.l2factor_xor_bdi == 3:
+        l3_sector_number = 30048
+    if l3size_in_kb == 1408 and args.l2factor_xor_bdi == 2.5:
+        l3_sector_number = 36064
+
+    cache_hierarchy = MSIThreeLevelNineXORMAPCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=8,
+        l1i_size="32kB",
+        l1i_assoc=8,
+
+        l2_size = "1024kB",
+        l2_assoc = 16,
+
+        l3_tag_size = args.l2size,
+        l3_tag_assoc = 11,
+        l3_data_size=f"{l3_sector_number}kB",
+        dir_cache_size = args.l2size,
+        dir_cache_assoc = 8,
+        dir_l3_total_size = f"{2*l3size_in_kb}kB",#in KB,
+        num_l3_banks = args.core,
+        l3_data_lat = l2_data_lat_map[int(specified_l2size)],
+        l3_tag_lat = l2_tag_lat_map[specified_l2size],
+        dir_data_lat = dir_data_lat_map[specified_l2size],
+        dir_tag_lat = dir_tag_lat_map[specified_l2size],
+        l3_map_bits=args.l2_map_bits,
+        l3_list_capacity=args.l2_list_capacity,
+        l3_num_maptable_set=args.l2_num_maptable_set,
+        l3_compression="bdi",
+        l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_data_array_regions=args.l2_data_regions,
+        record_line_level_entropy=args.record_line_level_entropy,
+        xor_folding_scheme=args.xor_folding_scheme,
+        xor_policy=args.xor_policy,
+        l3_transitions_per_cycle=args.l2_transitions_per_cycle,
+        index_bits_shift=args.index_bits_shift,
+    )
+elif args.protocol == 'msi_nine_xor_nobdi_map3':
+    requires(
+        isa_required=ISA.X86,
+        coherence_protocol_required=CoherenceProtocol.MSI_THREE_LEVEL_NINE_XOR_MAP,
+        kvm_required=False,
+    )
+
+    from gem5.components.cachehierarchies.ruby.msi_three_level_cache_hierarchy_nine_noxor_map import (
+        MSIThreeLevelNineXORMAPCacheHierarchy,
+    )
+    l3size_in_kb = int(args.l2size.split('kB')[0])
+    l3_sector_number = 64*l3size_in_kb
+    l3_sector_number = int(math.floor(l3_sector_number / args.l2factor_xor))
+
+    if l3size_in_kb == 1408 and args.l2factor_xor == 1.5:
+        l3_sector_number = 60096
+    if l3size_in_kb == 1408 and args.l2factor_xor == 3:
+        l3_sector_number = 30048
+    if l3size_in_kb == 1408 and args.l2factor_xor == 2.5:
+        l3_sector_number = 36064
+
+    cache_hierarchy = MSIThreeLevelNineXORMAPCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=8,
+        l1i_size="32kB",
+        l1i_assoc=8,
+
+        l2_size="1024kB",
+        l2_assoc=16,
+
+        l3_tag_size = args.l2size,
+        l3_tag_assoc = 11,
+        l3_data_size=f"{l3_sector_number}kB",
+        dir_cache_size = args.l2size,
+        dir_cache_assoc = 8,
+        dir_l3_total_size = f"{2*l3size_in_kb}kB",#in KB,
+        num_l3_banks = args.core,
+        l3_data_lat = l2_data_lat_map[int(specified_l2size)],
+        l3_tag_lat = l2_tag_lat_map[specified_l2size],
+        dir_data_lat = dir_data_lat_map[specified_l2size],
+        dir_tag_lat = dir_tag_lat_map[specified_l2size],
+        l3_map_bits=args.l2_map_bits,
+        l3_list_capacity=args.l2_list_capacity,
+        l3_num_maptable_set=args.l2_num_maptable_set,
+        l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_data_array_regions=args.l2_data_regions,
+        record_line_level_entropy=args.record_line_level_entropy,
+        xor_folding_scheme=args.xor_folding_scheme,
+        xor_policy=args.xor_policy,
+        l3_transitions_per_cycle=args.l2_transitions_per_cycle,
+    )
+elif args.protocol == 'msi_nine_noxor_bdi_map3':
+    requires(
+        isa_required=ISA.X86,
+        coherence_protocol_required=CoherenceProtocol.MSI_THREE_LEVEL_NINE_XOR_MAP,
+        kvm_required=False,
+    )
+
+    from gem5.components.cachehierarchies.ruby.msi_three_level_cache_hierarchy_nine_noxor_map import (
+        MSIThreeLevelNineNoXORMAPCacheHierarchy,
+    )
+    l3size_in_kb = int(args.l2size.split('kB')[0])
+    l3_sector_number = 64*l3size_in_kb
+    l3_sector_number = int(math.floor(l3_sector_number / args.l2factor_bdi))
+    if l3size_in_kb == 1408 and args.l2factor_bdi == 1.5:
+        l3_sector_number = 60096
+    if l3size_in_kb == 1408 and args.l2factor_bdi == 3:
+        l3_sector_number = 30048
+    if l3size_in_kb == 1408 and args.l2factor_bdi == 2.5:
+        l3_sector_number = 36064
+
+    cache_hierarchy = MSIThreeLevelNineNoXORMAPCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=8,
+        l1i_size="32kB",
+        l1i_assoc=8,
+
+        l2_size="1024kB",
+        l2_assoc=16,
+
+        l3_tag_size = args.l2size,
+        l3_tag_assoc = 8,
+        l3_data_size=f"{l3_sector_number}kB",
+        dir_cache_size = args.l2size,
+        dir_cache_assoc = 8,
+        dir_l3_total_size = f"{2*l3size_in_kb}kB",#in KB,
+        num_l3_banks = args.core,
+        l3_data_lat = l2_data_lat_map[int(specified_l2size)],
+        l3_tag_lat = l2_tag_lat_map[specified_l2size],
+        dir_data_lat = dir_data_lat_map[specified_l2size],
+        dir_tag_lat = dir_tag_lat_map[specified_l2size],
+        l3_map_bits=args.l2_map_bits,
+        l3_list_capacity=args.l2_list_capacity,
+        l3_num_maptable_set=args.l2_num_maptable_set,
+        l3_compression="bdi",
+        l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_data_array_regions=args.l2_data_regions,
+        record_line_level_entropy=args.record_line_level_entropy,
+        xor_folding_scheme=args.xor_folding_scheme,
+        l3_transitions_per_cycle=args.l2_transitions_per_cycle,
+    )
+elif args.protocol == 'msi_nine_noxor_nobdi_map3':
+    requires(
+        isa_required=ISA.X86,
+        coherence_protocol_required=CoherenceProtocol.MSI_THREE_LEVEL_NINE_XOR_MAP,
+        kvm_required=False,
+    )
+
+    from gem5.components.cachehierarchies.ruby.msi_three_level_cache_hierarchy_nine_noxor_map import (
+        MSIThreeLevelNineNoXORMAPCacheHierarchy,
+    )
+    l3size_in_kb = int(args.l2size.split('kB')[0])
+    l3_sector_number = 64*l3size_in_kb
+
+    cache_hierarchy = MSIThreeLevelNineNoXORMAPCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=8,
+        l1i_size="32kB",
+        l1i_assoc=8,
+
+        l2_size="1024kB",
+        l2_assoc=16,
+
+        l3_tag_size = args.l2size,
+        l3_tag_assoc = 11,
+        l3_data_size=f"{l3_sector_number}kB",
+        dir_cache_size = args.l2size,
+        dir_cache_assoc = 8,
+        dir_l3_total_size = f"{2*l3size_in_kb}kB",#in KB,
+        num_l3_banks = args.core,
+        l3_data_lat = max(l2_data_lat_map[int(specified_l2size)], l2_tag_lat_map[int(specified_l2size)]),
+        l3_tag_lat = max(l2_data_lat_map[int(specified_l2size)], l2_tag_lat_map[int(specified_l2size)]),
+        dir_data_lat = dir_data_lat_map[specified_l2size],
+        dir_tag_lat = dir_tag_lat_map[specified_l2size],
+        l3_map_bits=args.l2_map_bits,
+        l3_list_capacity=args.l2_list_capacity,
+        l3_num_maptable_set=args.l2_num_maptable_set,
+        l3_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l3_data_array_regions=args.l2_data_regions,
+        record_line_level_entropy=args.record_line_level_entropy,
+        xor_folding_scheme=args.xor_folding_scheme,
+        l3_transitions_per_cycle=args.l2_transitions_per_cycle,
+    )
+
+
 elif args.protocol == 'msi_exc_nobdi':
     requires(
         isa_required=ISA.X86,
@@ -610,6 +817,82 @@ elif args.protocol == 'msi_exc_bdi':
         l2_data_array_regions=args.l2_data_regions,
         l2_compression="bdi",
     )
+elif args.protocol == 'mesi2_inc_nobdi':
+    requires(
+        isa_required=ISA.X86,
+        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_INC_INTRACOMP,
+        kvm_required=False,
+    )
+
+    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_inc_intracomp import (
+        MESITwoLevelIncIntracompCacheHierarchy,
+    )
+    l2size_in_kb = int(args.l2size.split('kB')[0])
+    l2_sector_number = 64*l2size_in_kb
+
+    cache_hierarchy = MESITwoLevelIncIntracompCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=4,
+        l1i_size="16kB",
+        l1i_assoc=4,
+        l2_tag_size = args.l2size,
+        l2_tag_assoc = 8,
+        l2_data_size=f"{l2_sector_number}kB",
+        dir_cache_size = args.l2size,
+        dir_cache_assoc = 8,
+        dir_l2_total_size = f"{2*l2size_in_kb}kB",#in KB,
+        num_l2_banks = args.core,
+        l2_data_lat = max(l2_data_lat_map[int(specified_l2size/2)], l2_tag_lat_map[int(specified_l2size/2)]),
+        l2_tag_lat = max(l2_data_lat_map[int(specified_l2size/2)], l2_tag_lat_map[int(specified_l2size/2)]),
+        dir_data_lat = dir_data_lat_map[specified_l2size],
+        dir_tag_lat = dir_tag_lat_map[specified_l2size],
+        l2_transitions_per_cycle=args.l2_transitions_per_cycle,
+        l2_data_array_segment_size_in_byte=64,
+        l2_data_array_regions=1,
+        # l2_compression="bdi",
+    )
+elif args.protocol == 'mesi2_inc_bdi':
+    requires(
+        isa_required=ISA.X86,
+        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_INC_INTRACOMP,
+        kvm_required=False,
+    )
+
+    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_inc_intracomp import (
+        MESITwoLevelIncIntracompCacheHierarchy,
+    )
+    l2size_in_kb = int(args.l2size.split('kB')[0])
+    l2_sector_number = 64*l2size_in_kb
+    l2_sector_number = int(math.floor(l2_sector_number / args.l2factor_bdi))
+    if l2size_in_kb == 64 and args.l2factor_bdi == 1.5:
+        l2_sector_number = 2752
+    if l2size_in_kb == 64 and args.l2factor_bdi == 3:
+        l2_sector_number = 1376
+    if l2size_in_kb == 64 and args.l2factor_bdi == 2.5:
+        l2_sector_number = 1664
+
+    cache_hierarchy = MESITwoLevelIncIntracompCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=4,
+        l1i_size="16kB",
+        l1i_assoc=4,
+        l2_tag_size = args.l2size,
+        l2_tag_assoc = 8,
+        l2_data_size=f"{l2_sector_number}kB",
+        dir_cache_size = args.l2size,
+        dir_cache_assoc = 8,
+        dir_l2_total_size = f"{2*l2size_in_kb}kB",#in KB,
+        num_l2_banks = args.core,
+        l2_data_lat = max(l2_data_lat_map[int(specified_l2size/2)], l2_tag_lat_map[int(specified_l2size/2)]),
+        l2_tag_lat = max(l2_data_lat_map[int(specified_l2size/2)], l2_tag_lat_map[int(specified_l2size/2)]),
+        dir_data_lat = dir_data_lat_map[specified_l2size],
+        dir_tag_lat = dir_tag_lat_map[specified_l2size],
+        l2_transitions_per_cycle=args.l2_transitions_per_cycle,
+        l2_data_array_segment_size_in_byte=args.l2_data_segment_size,
+        l2_data_array_regions=args.l2_data_regions,
+        l2_compression="bdi",
+    )
+
 else:
     print("Unknown protocol")
     exit(1)

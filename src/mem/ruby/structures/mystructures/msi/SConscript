@@ -18,7 +18,7 @@ if env['PROTOCOL'] == 'MSI_Two_Level_NINE_XOR':
     # Source('CacheMemoryDecoupledTagData.cc')
     # Source('CacheMemoryXOR.cc')
     Source('DataProc.cc')
-if env['PROTOCOL'] == 'MSI_Two_Level_NINE_XOR_MAP':
+if env['PROTOCOL'] == 'MSI_Two_Level_NINE_XOR_MAP' or env['PROTOCOL'] == 'MSI_Three_Level_NINE_XOR_MAP':
     SimObject('RubyDirectMapTable.py', sim_objects=['RubyDirectMapTable'],enums=['XOR_Policy'])
     SimObject('RubyAssociativeMapTable.py', sim_objects=['RubyAssociativeMapTable'])
     SimObject('RubyCacheDualAddr.py', sim_objects=['RubyCacheDualAddr'])
@@ -56,7 +56,7 @@ if env['PROTOCOL'] == 'MSI_Two_Level_NINE_XOR_MAP':
     # Source('CacheMemoryXOR.cc')
     Source('DataProc.cc')
     Source('EntropyProfiler.cc')
-if env['PROTOCOL'] == 'MSI_Two_Level_EXC':
+if env['PROTOCOL'] == 'MSI_Two_Level_EXC' or env['PROTOCOL'] == 'MESI_Two_Level_inc_intracomp':
     SimObject('RubyCacheRegionSector.py', sim_objects=['RubyCacheRegionSector'])
     SimObject('RubyDataProc.py', sim_objects=['RubyDataProc'],enums=['Preproc', 'Compress'])
     

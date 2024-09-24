@@ -12,9 +12,9 @@ else
 fi
 
 declare -a bench=(
-    "2d_convolution"
+    # "2d_convolution"
     # "dwt53"
-    # "histogram_equalization"
+    "histogram_equalization"
     # "change-detection"
     # "debayer"
     # "lucas-kanade"
@@ -31,16 +31,26 @@ set="omp"
 suite="all"
 
 declare -a protocol=(
-     "msi_nine_xor_bdi_map"
+    # "baseline"
+    #  "msi_nine_xor_bdi_map"
     #  "msi_nine_noxor_bdi_map"
     #  "msi_nine_xor_nobdi_map"
     #  "msi_nine_noxor_nobdi_map"
 
+     "msi_nine_xor_bdi_map3"
+    #  "msi_nine_noxor_bdi_map3"
+    #  "msi_nine_xor_nobdi_map3"
+    #  "msi_nine_noxor_nobdi_map3"
+
     # "msi_exc_nobdi"
     # "msi_exc_bdi"
+
+    # "mesi2_inc_nobdi"
+    # "mesi2_inc_bdi"
 )
 
 ratio=2.5
+# ratio=1.5
 # ratio=2
 # ratio=1
 ratio_str=${ratio/./_}
@@ -53,7 +63,7 @@ OOO=0
 L2_DATA_SEGEMENT_SIZE=8
 L2_TRANSITIONS_PER_CYCLE=1024
 L2_DATA_REGIONS=32
-INDEX_SHIFT_BITS=3
+INDEX_SHIFT_BITS=0
 
 case $1 in
   1) echo "oppurtunistic"
@@ -165,11 +175,12 @@ line_entropy=""
 
 l2=(
     # 32
-    64
+    # 64
     # 128
     # 256
     # 512
     # 1024
+    1408
     # 2048
 )
 
@@ -180,8 +191,16 @@ debug=""
 # debug="--begin 18208298911130 --end 18208299011131 --flags ProtocolTrace,RubySlicc,RubyGenerated"
 # debug="--flags RubyDataTransformation,RubyAssociativeMapTable,RubyDataCluster"
 
-# debug="--begin 18548039648069 --end 18548039658070 --flags ProtocolTrace,RubySlicc,RubyGenerated,RubyReplacement,RubyDataUpdate,RubyCacheFASector" #dwt
+# debug="--begin 19279464824070 --end 19279464834070 --flags ProtocolTrace,RubySlicc,RubyGenerated" # histogram_equalizations
+# debug="--flags ProtocolTrace,RubySlicc,RubyGenerated" # generic
 
+################################## approxilyzer trace gen ##################################
+# debug="--flags ExecEnable,ExecUser,ExecEffAddr,ExecMacro --dfile dump_micro.gz"
+# debug="--flags MemoryAccess --dfile mem_dump.gz"
+
+# DISASSEMBLE=""
+# DISASSEMBLE="--disassemble 1"
+################################## approxilyzer trace gen ##################################
 
 for L2SIZE in ${l2[@]};do
     for CORE in ${core[@]};do
@@ -189,22 +208,23 @@ for L2SIZE in ${l2[@]};do
         do
             for BEN in "${bench[@]}"
             do
-                if [ "$PROT" = "msi_nine_noxor_nobdi_map" ]; then
+                if [[ "$PROT" = "msi_nine_noxor_nobdi_map" || "$PROT" = "msi_nine_noxor_nobdi_map3" ]]; then
                     session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
                     L2_DATA_REGIONS_USED=1
                     L2_DATA_SEGEMENT_SIZE_USED=1
-                elif [ "$PROT" = "msi_nine_noxor_bdi_map" ]; then
+                elif [[ "$PROT" = "msi_nine_noxor_bdi_map" || "$PROT" = "msi_nine_noxor_bdi_map3" ]]; then
                     L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                     session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
-                elif [ "$PROT" = "msi_nine_xor_nobdi_map" ]; then
+                elif [[ "$PROT" = "msi_nine_xor_nobdi_map" || "$PROT" = "msi_nine_xor_nobdi_map3" ]]; then
                     L2_DATA_REGIONS_USED=1
                     L2_DATA_SEGEMENT_SIZE_USED=1
                     session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}
-                elif [ "$PROT" = "msi_nine_xor_bdi_map" ]; then
+                elif [[ "$PROT" = "msi_nine_xor_bdi_map" || "$PROT" = "msi_nine_xor_bdi_map3" ]]; then
                     L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                     session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}_${INDEX_SHIFT_BITS}shift
+                
                 elif [ "$PROT" = "msi_exc_nobdi" ]; then
                     L2_DATA_REGIONS_USED=1
                     L2_DATA_SEGEMENT_SIZE_USED=1
@@ -214,6 +234,19 @@ for L2SIZE in ${l2[@]};do
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                     session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
                 
+                elif [ "$PROT" = "mesi2_inc_nobdi" ]; then
+                    L2_DATA_REGIONS_USED=1
+                    L2_DATA_SEGEMENT_SIZE_USED=1
+                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+                elif [ "$PROT" = "mesi2_inc_bdi" ]; then
+                    L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
+                    L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
+                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
+                
+                elif [ "$PROT" = "baseline" ]; then
+                    L2_DATA_REGIONS_USED=1
+                    L2_DATA_SEGEMENT_SIZE_USED=1
+                    session_name=restore_perfect_baseline
                 else
                     echo "wrong protocol"
                     exit 1
@@ -246,7 +279,8 @@ for L2SIZE in ${l2[@]};do
                     --xor_policy $xor_policy \
                     --suite_name $suite \
                     --index_bits_shift ${INDEX_SHIFT_BITS} \
-                    --l2size ${L2SIZE}kB $debug" C-m
+                    $DISASSEMBLE \
+                    --l2size ${L2SIZE}kB $debug " C-m
                 else
                     echo "$BEN"
                     tmux new-window -n $BEN -t $session_name:
@@ -271,6 +305,7 @@ for L2SIZE in ${l2[@]};do
                     --xor_policy $xor_policy \
                     --suite_name $suite \
                     --index_bits_shift ${INDEX_SHIFT_BITS} \
+                    $DISASSEMBLE \
                     --l2size ${L2SIZE}kB $debug" C-m
                 fi
             done

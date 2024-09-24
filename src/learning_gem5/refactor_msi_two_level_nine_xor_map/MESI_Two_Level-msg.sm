@@ -1,37 +1,6 @@
-
-/*
- * Copyright (c) 1999-2005 Mark D. Hill and David A. Wood
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are
- * met: redistributions of source code must retain the above copyright
- * notice, this list of conditions and the following disclaimer;
- * redistributions in binary form must reproduce the above copyright
- * notice, this list of conditions and the following disclaimer in the
- * documentation and/or other materials provided with the distribution;
- * neither the name of the copyright holders nor the names of its
- * contributors may be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
- * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
- * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
- * OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
- * SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
- * DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
- * THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- */
-
-
 // CoherenceRequestType
 enumeration(CoherenceRequestType, desc="...") {
   GETX,      desc="Get eXclusive";
-  GETX_INV,      desc="Get eXclusive";
   UPGRADE,   desc="UPGRADE to exclusive";
   GETS,      desc="Get Shared";
   GET_INSTR, desc="Get Instruction";
@@ -47,9 +16,8 @@ enumeration(CoherenceRequestType, desc="...") {
   DMA_WRITE, desc="DMA Write";
 
   RECOVER, desc="data request";
-  RECOVERSUB, desc="data request";
-  RECONSTRUCTX, desc="reconstruct data request, GETX";
   RECONSTRUCTS, desc="reconstruct data request, GETS";
+
 }
 
 // CoherenceResponseType
@@ -61,17 +29,17 @@ enumeration(CoherenceResponseType, desc="...") {
   // DATA_EXCLUSIVE, desc="Data block for L1 cache in M/E state";
   MEMORY_DATA, desc="Data block from / to main memory";
   ACK, desc="Generic invalidate ack";
-  ACKS, desc="Generic invalidate ack";
   ACKDATA, desc="Generic invalidate ack";
   WB_ACK, desc="writeback ack";
   WB_NACK, desc="writeback nack";
   UNBLOCK, desc="unblock";
   EXCLUSIVE_UNBLOCK, desc="exclusive unblock";
-  EXCLUSIVE_UNBLOCK_DATA, desc="exclusive unblock data";
   INV, desc="Invalidate from directory";
   RECOVERDATA, desc="data response";
-  RECONSTRUCTDATAX, desc="data response";
   RECONSTRUCTDATAS, desc="data response";
+
+  UNXORWB, desc="unxorwb";
+  DATA_UNXORWB, desc="unxorwb";
 }
 
 
@@ -122,6 +90,7 @@ structure(ResponseMsg, desc="...", interface="Message") {
   MessageSizeType MessageSize,  desc="size category of the message";
   Addr piggybacked_addr,        desc="piggybacked address";
   L2HitMissPath l2_hit_miss_path, default="L2HitMissPath_NONE",        desc="l2 hit/miss path";
+  // DIRECT, PB, FWDA, FWDB, MISS, COHERENCE
 
   bool functionalRead(Packet *pkt) {
     // Valid data block is only present in message with following types
@@ -147,6 +116,7 @@ structure(TriggerMsg, desc="...", interface="Message") {
   Addr addr,             desc="Physical address for this request";
   Tick enqueTick,     desc="Tick when the message was enqueued";
   // TriggerType Type,            desc="Type of trigger";
+  Addr to_send_unblock_addr,        desc="piggybacked address";
 
   bool functionalRead(Packet *pkt) {
     // Trigger messages do not hold any data!

@@ -29,7 +29,7 @@ from ......isas import ISA
 from ..abstract_l1_cache import AbstractL1Cache
 from ......utils.override import *
 
-from m5.objects import MessageBuffer, RubyPrefetcher, RubyCache, ClockDomain, RubyDataProc
+from m5.objects import MessageBuffer, RubyCache, ClockDomain, RubyDataProc
 
 import math
 
@@ -47,6 +47,7 @@ class L1Cache(AbstractL1Cache):
         cache_line_size,
         target_isa: ISA,
         clk_domain: ClockDomain,
+        preproc="no_preproc",
         l1_data_lat=2,
         l1_tag_lat=2,
     ):
@@ -74,11 +75,12 @@ class L1Cache(AbstractL1Cache):
         )
         self.l2_select_num_bits = int(math.log(num_l2Caches, 2))
         self.clk_domain = clk_domain
-        self.prefetcher = RubyPrefetcher()
         self.send_evictions = core.requires_send_evicts()
         self.transitions_per_cycle = 4
-        self.enable_prefetch = False
-        self.dataProcL1 = RubyDataProc()
+        self.dataProcL1 = RubyDataProc(
+            preprocessing=preproc,
+            compress="no_compress",
+        )
 
     @overrides(AbstractL1Cache)
     def connectQueues(self, network):
@@ -89,8 +91,6 @@ class L1Cache(AbstractL1Cache):
         self.responseFromL1Cache.out_port = network.in_port
         self.unblockFromL1Cache = MessageBuffer()
         self.unblockFromL1Cache.out_port = network.in_port
-
-        self.optionalQueue = MessageBuffer()
 
         self.requestToL1Cache = MessageBuffer()
         self.requestToL1Cache.in_port = network.out_port

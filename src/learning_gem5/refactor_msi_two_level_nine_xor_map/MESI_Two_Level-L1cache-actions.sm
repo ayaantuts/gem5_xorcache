@@ -1,0 +1,353 @@
+  action(set_l2_hit_miss_path_unxor_conditionally, "setpUC", desc="set l2 hit miss path") {
+    peek(responseL1Network_in, ResponseMsg) {
+      assert(is_valid(tbe));
+      if (in_msg.l2_hit_miss_path == L2HitMissPath:L1COHERENCEUNXOR) {
+        tbe.l2_hit_miss_path := L2HitMissPath:L1COHERENCEUNXOR;
+        DPRINTF(RubySlicc, "set l2 hit miss path %s\n", in_msg.l2_hit_miss_path);
+      }
+    }
+  }
+  action(set_l2_hit_miss_path_direct, "setpMD", desc="set l2 hit miss path") {
+    peek(responseL1Network_in, ResponseMsg) {
+      assert(is_valid(tbe));
+      tbe.l2_hit_miss_path := in_msg.l2_hit_miss_path;
+      DPRINTF(RubySlicc, "set l2 hit miss path %s\n", in_msg.l2_hit_miss_path);
+      assert(tbe.l2_hit_miss_path == L2HitMissPath:DIRECT || 
+        tbe.l2_hit_miss_path == L2HitMissPath:DIRECTUNXOR);
+    }
+  }
+  action(set_l2_hit_miss_path_coh, "setpCOH", desc="set l2 hit miss path") {
+    assert(is_valid(tbe));
+    tbe.l2_hit_miss_path := L2HitMissPath:L1COHERENCE;
+    DPRINTF(RubySlicc, "set l2 hit miss path %s\n", tbe.l2_hit_miss_path);
+  }
+  action(ds_sendDataSToRequestor, "ds", desc="send dataS to requestor") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:DATAS;
+        out_msg.DataBlk := cache_entry.DataBlk;
+        out_msg.Dirty := cache_entry.Dirty;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        DPRINTF(RubySlicc, "ds_sendDataSToRequestor %#x dirty(%d) send out\n",
+                address, out_msg.Dirty);
+      }
+    }
+  }
+  action(dst_sendDataSToRequestor_fromTBE, "dst", desc="send dataS to requestor") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, tbe_latency) {
+        assert(is_valid(tbe));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:DATAS;
+        out_msg.DataBlk := tbe.DataBlk;
+        out_msg.Dirty := tbe.Dirty;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        DPRINTF(RubySlicc, "dst_sendDataSToRequestor_fromTBE %#x dirty(%d) send out\n",
+                address, out_msg.Dirty);
+      }
+    }
+  }
+  action(fi_sendInvAckData, "fid", desc="send data to the L2 cache") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:ACKDATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.AckCount := 1;
+        out_msg.DataBlk := cache_entry.DataBlk;
+        out_msg.Dirty := cache_entry.Dirty;
+        DPRINTF(RubySlicc, "fi_sendInvAckData %#x, DataBlk=%s\n",
+          address, cache_entry.DataBlk);
+      }
+    }
+  }
+  action(fi_sendInvAckData_fromTBE, "fidt", desc="send data to the L2 cache") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, tbe_latency) {
+        assert(is_valid(tbe));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:ACKDATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.AckCount := 1;
+        out_msg.DataBlk := tbe.DataBlk;
+        out_msg.Dirty := tbe.Dirty;
+      }
+    }
+  }
+  action(ri_sendRecoverData, "ri", desc="send data to the L2 cache") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:RECOVERDATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.AckCount := 1;
+        out_msg.DataBlk := cache_entry.DataBlk;
+        out_msg.Dirty := cache_entry.Dirty;
+      }
+    }
+  }
+  action(rillc_sendRecoverData_toL2, "rillc", desc="send data to the L2 cache") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:RECOVERDATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(mapAddressToRange(address, MachineType:L2Cache,
+                          l2_select_low_bit, l2_select_num_bits, intToID(0)));
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.DataBlk := cache_entry.DataBlk;
+        out_msg.Dirty := cache_entry.Dirty;
+      }
+    }
+  }
+  action(rillct_sendRecoverData_toL2_fromTBE, "rillct", desc="send data to the L2 cache") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, tbe_latency) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:RECOVERDATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(mapAddressToRange(address, MachineType:L2Cache,
+                          l2_select_low_bit, l2_select_num_bits, intToID(0)));
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.DataBlk := tbe.DataBlk;
+        out_msg.Dirty := tbe.Dirty;
+      }
+    }
+  }
+  
+
+  action(rcis_sendReconstructDataS, "rcis", desc="send reconstruct data to requestor") {
+    peek(requestL1Network_in, RequestMsg) {
+      DataBlock newData := dataProcL1.preprocess(cache_entry.DataBlk, in_msg.DataBlk_phy);
+      enqueue(responseL1Network_out, ResponseMsg, L1Dcache.getDataLatency()) {
+        out_msg.addr := in_msg.piggybacked_addr;
+        out_msg.Type := CoherenceResponseType:RECONSTRUCTDATAS;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data_DualAddr;
+        // out_msg.AckCount := in_msg.AckCount_communicate;
+        out_msg.DataBlk := newData;
+        out_msg.Dirty := false;
+        DPRINTF(RubySlicc, "sending RECONSTRUCT DATA to %s, data=%s\n",out_msg.Destination, out_msg.DataBlk);
+      }
+    }
+  }
+  action(rcist_sendReconstructDataS_fromTBE, "rcist", desc="send reconstruct data to requestor") {
+    peek(requestL1Network_in, RequestMsg) {
+      DataBlock newData := dataProcL1.preprocess(tbe.DataBlk, in_msg.DataBlk_phy);
+      enqueue(responseL1Network_out, ResponseMsg, tbe_latency) {
+        out_msg.addr := in_msg.piggybacked_addr;
+        out_msg.Type := CoherenceResponseType:RECONSTRUCTDATAS;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data_DualAddr;
+        // out_msg.AckCount := in_msg.AckCount_communicate;
+        out_msg.DataBlk := newData;
+        out_msg.Dirty := false;
+        DPRINTF(RubySlicc, "sending RECONSTRUCT DATA to %s, data=%s\n",out_msg.Destination, out_msg.DataBlk);
+      }
+    }
+  }
+  action(rit_sendRecoverData_fromTBE, "rit", desc="send data to the L2 cache from TBE") {
+    peek(requestL1Network_in, RequestMsg) {
+      enqueue(responseL1Network_out, ResponseMsg, tbe_latency) {
+        out_msg.addr := address;
+        out_msg.Type := CoherenceResponseType:RECOVERDATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(in_msg.Requestor);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.AckCount := 1;
+        out_msg.DataBlk := tbe.DataBlk;
+        out_msg.Dirty := tbe.Dirty;
+      }
+    }
+  }
+
+
+  
+  action(hx_load_hit_dynamic, "hxdynamic", desc="Notify sequencer the load completed.")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    peek(responseL1Network_in, ResponseMsg) {
+      if (in_msg.l2_hit_miss_path == L2HitMissPath:MISS) {
+        sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:Memory, L2HitMissPath:MISS); // L1 read miss serviced by mem
+      } else if (in_msg.l2_hit_miss_path == L2HitMissPath:DIRECT) {
+        sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:DIRECT); // L1 read miss serviced by l2
+      } else {
+        error("<hx_load_hit_dynamic> unknown l2 hit miss path");
+      }
+    }
+    DPRINTF(RubySlicc, "after callback %s\n", cache_entry.DataBlk);
+  }
+  ////////////////////////// l2 serviced load miss //////////////////////////
+  action(hx_load_hit_l2resp_pb, "hxl2pb", desc="Notify sequencer the load completed;l2 is the responder; pb")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:PB); // L1 miss
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (PB)\n", cache_entry.DataBlk);
+  }
+  action(hx_load_hit_l1resp_fwde, "hxl2fe", desc="Notify sequencer the load completed;l2 is the responder; fwd-A")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:L1Cache, L2HitMissPath:FWDE); // L1 miss
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (FWD-E)\n", cache_entry.DataBlk);
+  }
+  action(hx_load_hit_l2resp_fwda, "hxl2fa", desc="Notify sequencer the load completed;l2 is the responder; fwd-A")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:FWDA); // L1 miss
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (FWD-A)\n", cache_entry.DataBlk);
+  }
+  action(hx_load_hit_l2resp_fwdb, "hxl2fb", desc="Notify sequencer the load completed;l2 is the responder; fwd-B")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:FWDB); // L1 miss
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (FWD-B)\n", cache_entry.DataBlk);
+  }
+  //////////////////////////////////////////////////////////////////////////////
+  action(hx_load_hit_memresp, "hxmem", desc="Notify sequencer the load completed; mem is the responder")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.readCallback(address, cache_entry.DataBlk, true, MachineType:Memory); // L1 miss
+    DPRINTF(RubySlicc, "after callback %s\n", cache_entry.DataBlk);
+  }
+  action(hhx_store_hit_dynamic, "\hxdynamic", desc="Notify sequencer that store completed.")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    peek(responseL1Network_in, ResponseMsg) {
+      if (in_msg.l2_hit_miss_path == L2HitMissPath:MISS) {
+        sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:Memory, L2HitMissPath:MISS);
+      } else if (in_msg.l2_hit_miss_path == L2HitMissPath:DIRECT) {
+        sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:DIRECT);
+      } else if (in_msg.l2_hit_miss_path == L2HitMissPath:DIRECTUNXOR) {
+        sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:DIRECTUNXOR);
+      } else {
+        DPRINTF(RubySlicc, "in_msg.l2_hit_miss_path %s, ADDR: %llx\n", in_msg.l2_hit_miss_path, address);
+        error("<hhx_store_hit_dynamic> unknown l2 hit miss path");
+      }
+    }
+    cache_entry.Dirty := true;
+    DPRINTF(RubySlicc, "after callback %s\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "%llx dirty set\n", address);
+  }
+  action(hhx_store_hit_dynamic_tbe, "\hxdynamicTBE", desc="Notify sequencer that store completed.")
+  {
+    assert(is_valid(cache_entry));
+    assert(is_valid(tbe));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    if (tbe.l2_hit_miss_path == L2HitMissPath:DIRECT) {
+      sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:DIRECT); 
+    } else if (tbe.l2_hit_miss_path == L2HitMissPath:DIRECTUNXOR) {
+      sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:DIRECTUNXOR); 
+    } else if (tbe.l2_hit_miss_path == L2HitMissPath:L1COHERENCE) {
+      sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L1Cache, L2HitMissPath:L1COHERENCE); 
+    } else if (tbe.l2_hit_miss_path == L2HitMissPath:L1COHERENCEUNXOR) {
+      sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L1Cache, L2HitMissPath:L1COHERENCEUNXOR); 
+    } else {
+        DPRINTF(RubySlicc, "in_msg.l2_hit_miss_path %s, ADDR: %llx\n", tbe.l2_hit_miss_path, address);
+        error("<hhx_store_hit_dynamic_tbe> unknown l2 hit miss path");
+    }
+    cache_entry.Dirty := true;
+    DPRINTF(RubySlicc, "after callback %s\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "%llx dirty set\n", address);
+  }
+  ////////////////////////// l2 serviced store miss //////////////////////////
+  action(hhx_store_hit_l2resp_pb, "\hxl2pb", desc="Notify sequencer that store completed; l2 is the responder; PB")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:PB);
+    cache_entry.Dirty := true;
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (PB)\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "%llx dirty set\n", address);
+  }
+  action(hhx_store_hit_l1resp_fwde, "\hxl2fe", desc="Notify sequencer that store completed; l2 is the responder; FWD-E")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L1Cache, L2HitMissPath:FWDE);
+    cache_entry.Dirty := true;
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (FWD-E)\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "%llx dirty set\n", address);
+  }
+  action(hhx_store_hit_l2resp_fwda, "\hxl2fa", desc="Notify sequencer that store completed; l2 is the responder; FWD-A")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:FWDA);
+    cache_entry.Dirty := true;
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (FWD-A)\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "%llx dirty set\n", address);
+  }
+  action(hhx_store_hit_l2resp_fwdb, "\hxl2fb", desc="Notify sequencer that store completed; l2 is the responder; FWD-B")
+  {
+    assert(is_valid(cache_entry));
+    DPRINTF(RubySlicc, "before callback %s\n", cache_entry.DataBlk);
+    // Request misses and new replacement policy info is set for new entry.
+    // No need to setMRU on external hit.
+    sequencer.writeCallback(address, cache_entry.DataBlk, true, MachineType:L2Cache, L2HitMissPath:FWDB);
+    cache_entry.Dirty := true;
+    DPRINTF(RubySlicc, "after callback %s; L2 SERVICED (FWD-B)\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "%llx dirty set\n", address);
+  }
+  
+  //////////////////////////////////////////////////////////////////////////////
+
+  action(u_writeDataToL1Cache_PB, "uPB", desc="Write data to cache") {
+    peek(responseL1Network_in, ResponseMsg) {
+      assert(is_valid(cache_entry));
+
+      // DataBlock pb := getDataBlock(in_msg.piggybacked_addr);
+      // DPRINTF(RubySlicc, "read pb block (0x%llx)\n", in_msg.piggybacked_addr);
+      // assert(is_valid(getCacheEntry(in_msg.piggybacked_addr))); // tbe should be valid
+      
+      // DPRINTF(RubySlicc, "xorer: %s\n", in_msg.DataBlk);
+      // DataBlock dataBlk := dataProcL1.preprocess(pb, in_msg.DataBlk);
+      // DPRINTF(RubySlicc, "after xor: %s\n", dataBlk);
+      cache_entry.DataBlk := in_msg.DataBlk;
+      cache_entry.Dirty := in_msg.Dirty;
+      DPRINTF(RubySlicc, "%llx dirty to (%d) in cache from in_msg\n", address, in_msg.Dirty);
+    }
+  }
+  

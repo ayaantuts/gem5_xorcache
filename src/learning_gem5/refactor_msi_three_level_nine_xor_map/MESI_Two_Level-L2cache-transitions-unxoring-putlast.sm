@@ -1,0 +1,182 @@
+//  ==== PUT ====
+  transition(L2ONLY_SS, L1_PUTS_last2, L2ONLY_SS_s) { 
+    // expand from 1 to 2 entries
+    tn_sendWBNack;
+    aad_allocateData; // allocate new for secondary
+    expand_data1; // expand original block to full size to overprovision
+
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS_s, L1_PUTS_last_data2, L2ONLY) { 
+    entropy_rm_xor_data;
+    entropyXOR_rm_xor_data;
+
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    aadns_allocateDataNS;
+    aadns1_allocateDataNS;
+    lls_clearSecondarySharers;
+
+    mlr2_writeLogicalDataToCacheFromRequest;
+
+    mpxr_writePhyDataToCache_XOR_fromRequest; // recover because primary needs to be recovered
+
+    update_data1;
+    entropy_reg_primary_data; // add primary toward entropy calculation
+
+    update_data2;
+    entropy_reg_secondary_data; // add secondary toward entropy calculation
+    
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    l2a2_allocateL2;
+    set_secondary_as_cache_entry; // implicitly transition to L2ONLY
+    // l2set2_l2only; // secondary: SS -> L2ONLY
+    l2set1_l2only; // primary: L2ONLY
+
+    aast1_allocateSingularTag_primary;
+    aast2_allocateSingularTag_secondary;
+
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+
+
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileDMTRead;
+  }
+  
+  transition(L2ONLY_SS, L1_PUTX2, L2ONLY_SS_s) { //NOTE: It's possible to receive old PUTX at SS state
+    // expand from 1 to 2 entries
+    tn_sendWBNack;
+    aad_allocateData; // allocate new for secondary
+    expand_data1; // expand original block to full size to overprovision
+
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+  }
+  
+
+  transition(SS_L2ONLY, L1_PUTS_last, SS_L2ONLY_s) { 
+    tn_sendWBNack;
+    aad2_allocateData;// allocate new for secondary
+    expand_data1; // expand original block to full size to overprovision
+
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY_s, L1_PUTS_last_data, L2ONLY) { 
+    entropy_rm_xor_data;
+    entropyXOR_rm_xor_data;
+
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    aadns_allocateDataNS;
+    aadns2_allocateDataNS;
+    ll_clearSharers;
+
+    mlr1_writeLogicalDataToCacheFromRequest;
+
+    mpr_writePhyDataToCache_fromRequest; // directly write because primary needs to be remained
+
+    update_data1;
+    entropy_reg_primary_data; // add primary toward entropy calculation
+
+    update_data2;
+    entropy_reg_secondary_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    l2a2_allocateL2;
+    l2set2_l2only;
+    // l2set1_l2only; // implicitly transition to L2ONLY
+
+    aast1_allocateSingularTag_primary;
+    aast2_allocateSingularTag_secondary;
+
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+
+
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileDMTRead;
+  }
+  
+  transition(SS_L2ONLY, L1_PUTX, L2ONLY) { //NOTE: It's possible to receive old PUTX at SS state
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    aadns_allocateDataNS;
+    aadns2_allocateDataNS;
+    ll_clearSharers;
+
+    mlr1_writeLogicalDataToCacheFromRequest;
+
+    entropy_rm_xor_data;
+    entropyXOR_rm_xor_data;
+
+    mpr_writePhyDataToCache_fromRequest; // directly write because primary needs to be remained
+
+    update_data1;
+    entropy_reg_primary_data; // add primary toward entropy calculation
+    
+    aad2_allocateData_size_accordingly;
+    entropy_reg_secondary_data; // add secondary toward entropy calculation
+
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    l2a2_allocateL2;
+    l2set2_l2only;
+    // l2set1_l2only; // implicitly transition to L2ONLY
+
+    aast1_allocateSingularTag_primary;
+    aast2_allocateSingularTag_secondary;
+
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+
+
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileDMTRead;
+  }
+
+  

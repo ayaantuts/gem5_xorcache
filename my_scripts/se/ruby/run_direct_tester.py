@@ -36,6 +36,10 @@ parser.add_argument(
              "msi", "msi_nine", "msi_exc",
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
+
+             "msi_nine_xor_bdi_map3", "msi_nine_noxor_bdi_map3",
+             "msi_nine_xor_nobdi_map3", "msi_nine_noxor_nobdi_map3",
+
              "msi_nine_noxor_thesaurus_map",
              ],
     required=True,
@@ -104,6 +108,7 @@ elif args.protocol == "msi_nine_xor":
 elif args.protocol == "msi_nine_noxor":
     design = "MyMSI_NINE_XOR"
     design_out = "MyMSI_NINE_NOXOR"
+
 elif args.protocol == "msi_nine_xor_bdi_map":
     design = "MyMSI_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_XOR_BDI_MAP"
@@ -116,6 +121,20 @@ elif args.protocol == "msi_nine_xor_nobdi_map":
 elif args.protocol == "msi_nine_noxor_nobdi_map":
     design = "MyMSI_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP"
+
+elif args.protocol == "msi_nine_xor_bdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_XOR_BDI_MAP3"
+elif args.protocol == "msi_nine_noxor_bdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_BDI_MAP3"
+elif args.protocol == "msi_nine_xor_nobdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_XOR_NOBDI_MAP3"
+elif args.protocol == "msi_nine_noxor_nobdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP3"
+
 elif args.protocol == "msi_nine_noxor_thesaurus_map":
     design = "MyMSI_NINE_XOR_MAP_THESAURUS"
     design_out = "MyMSI_NINE_NOXOR_THESAURUS_MAP"

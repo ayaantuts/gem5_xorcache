@@ -29,10 +29,13 @@ parser.add_argument(
     type=str,
     help="which protocol to run",
     choices=["baseline", "noisy", "decoupled", "compress", "dedup", "bdixor", \
-             "msi", "msi_nine", "msi_exc_nobdi", "msi_exc_bdi", \
+             "msi", "msi_nine", \
+             "msi_exc_nobdi", "msi_exc_bdi", \
+             "mesi2_nobdi", "mesi2_bdi", \
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
              "msi_nine_noxor_thesaurus_map",
+             "msi_nine_noxor_nobdi_map3", "msi_nine_xor_bdi_map3", "msi_nine_noxor_bdi_map3", "msi_nine_xor_nobdi_map3",
              ],
     required=True,
 )
@@ -91,18 +94,28 @@ elif args.protocol == "msi":
 elif args.protocol == "msi_nine":
     design = "MyMSI_NINE"
     design_out = design
+
 elif args.protocol == "msi_exc_nobdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_NOBDI"
 elif args.protocol == "msi_exc_bdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_BDI"
+
+elif args.protocol == "mesi2_nobdi":
+    design = "MyMESI_INTRACOMP"
+    design_out = "MyMESI2_NOBDI"
+elif args.protocol == "mesi2_bdi":
+    design = "MyMESI_INTRACOMP"
+    design_out = "MyMESI2_BDI"
+
 elif args.protocol == "msi_nine_xor":
     design = "MyMSI_NINE_XOR"
     design_out = design
 elif args.protocol == "msi_nine_noxor":
     design = "MyMSI_NINE_XOR"
     design_out = "MyMSI_NINE_NOXOR"
+
 elif args.protocol == "msi_nine_xor_bdi_map":
     design = "MyMSI_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_XOR_BDI_MAP"
@@ -115,6 +128,20 @@ elif args.protocol == "msi_nine_xor_nobdi_map":
 elif args.protocol == "msi_nine_noxor_nobdi_map":
     design = "MyMSI_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP"
+
+elif args.protocol == "msi_nine_xor_bdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_XOR_BDI_MAP3"
+elif args.protocol == "msi_nine_noxor_bdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_BDI_MAP3"
+elif args.protocol == "msi_nine_xor_nobdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_XOR_NOBDI_MAP3"
+elif args.protocol == "msi_nine_noxor_nobdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP3"
+
 elif args.protocol == "msi_nine_noxor_thesaurus_map":
     design = "MyMSI_NINE_XOR_MAP_THESAURUS"
     design_out = "MyMSI_NINE_NOXOR_THESAURUS_MAP"

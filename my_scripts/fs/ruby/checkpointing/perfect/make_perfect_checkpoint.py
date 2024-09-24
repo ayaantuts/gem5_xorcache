@@ -63,6 +63,13 @@ parser.add_argument(
     help="by default, we use hook to annotate ROI",
 )
 parser.add_argument(
+    "--disassemble",
+    type=bool,
+    required=False,
+    default=False,
+    help="by default, we don't need to disassemble",
+)
+parser.add_argument(
     "--kernel_args",
     required=False,
     type=str,
@@ -90,8 +97,12 @@ else: assert False
 if args.hook:
     testname= "fs_perfect"
     py_config_file_name = "perfect-hook-save-checkpoint.py"
+    if args.disassemble:
+        testname += "_disassemble"
+        py_config_file_name = "perfect-hook-disassemble-save-checkpoint.py"
 else:
     assert False
+
 
 path = f"m5out/m5out_{testname}/{design_nickname}/{args.set}_core{args.core}/{args.benchmark}"
 

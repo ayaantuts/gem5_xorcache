@@ -1,0 +1,21 @@
+transition({S,SS,S_IL0}, UNXOR_WB) {
+    sendUnxorwbdata;
+    o_popIncomingResponseQueue;
+}
+transition(SM, UNXOR_WB) {
+    sendUnxorwbdata;
+    o_popIncomingResponseQueue;
+}
+transition(SINK_WB_ACK, UNXOR_WB) {
+    sendUnxorwbdata_fromTBE;
+    o_popIncomingResponseQueue;
+}
+// transition(IS, UNXOR_WB) {
+//     z_stallAndWaitRequestQueue;
+// }
+
+transition(S_serial_PB, UNXOR_WB) {
+    sendUnxorwbdata;
+    o_popIncomingResponseQueue;
+}
+

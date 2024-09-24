@@ -35,13 +35,21 @@ declare -a run=(
 )
 
 declare -a protocol=(
-     "msi_nine_xor_bdi_map"
+    #  "msi_nine_xor_bdi_map"
     #  "msi_nine_noxor_bdi_map"
     #  "msi_nine_xor_nobdi_map"
     #  "msi_nine_noxor_nobdi_map"
 
+     "msi_nine_xor_bdi_map3"
+    #  "msi_nine_noxor_bdi_map3"
+    #  "msi_nine_xor_nobdi_map3"
+    #  "msi_nine_noxor_nobdi_map3"
+
     # "msi_exc_nobdi"
     # "msi_exc_bdi"
+
+    # "mesi2_inc_nobdi"
+    # "mesi2_inc_bdi"
 
 )
 
@@ -170,8 +178,9 @@ esac
 
 declare -a l2size=(
     # 32
-    64
+    # 64
     # 128
+    1408
 )
 
 NUMPROC=4
@@ -197,27 +206,37 @@ detailed=1000000000 #1B
 for L2SIZE in ${l2size[@]};do
     for RUN in ${run[@]};do
         for PROT in "${protocol[@]}";do
-            if [ "$PROT" = "msi_nine_noxor_nobdi_map" ]; then
+            if [[ "$PROT" = "msi_nine_noxor_nobdi_map" || "$PROT" = "msi_nine_noxor_nobdi_map3" ]]; then
                 session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
                 L2_DATA_REGIONS_USED=1
                 L2_DATA_SEGEMENT_SIZE_USED=1
-            elif [ "$PROT" = "msi_nine_noxor_bdi_map" ]; then
+            elif [[ "$PROT" = "msi_nine_noxor_bdi_map" || "$PROT" = "msi_nine_noxor_bdi_map3" ]]; then
                 L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                 L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                 session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_text}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
-            elif [ "$PROT" = "msi_nine_xor_nobdi_map" ]; then
+            elif [[ "$PROT" = "msi_nine_xor_nobdi_map" || "$PROT" = "msi_nine_xor_nobdi_map3" ]]; then
                 L2_DATA_REGIONS_USED=1
                 L2_DATA_SEGEMENT_SIZE_USED=1
                 session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_text}_${L2_TRANSITIONS_PER_CYCLE}t_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}
-            elif [ "$PROT" = "msi_nine_xor_bdi_map" ]; then
+            elif [[ "$PROT" = "msi_nine_xor_bdi_map" || "$PROT" = "msi_nine_xor_bdi_map3" ]]; then
                 L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                 L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                 session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_text}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}_${INDEX_SHIFT_BITS}shift
+            
             elif [ "$PROT" = "msi_exc_nobdi" ]; then
                 L2_DATA_REGIONS_USED=1
                 L2_DATA_SEGEMENT_SIZE_USED=1
                 session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
             elif [ "$PROT" = "msi_exc_bdi" ]; then
+                L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
+                L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
+                session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
+            
+            elif [ "$PROT" = "mesi2_inc_nobdi" ]; then
+                L2_DATA_REGIONS_USED=1
+                L2_DATA_SEGEMENT_SIZE_USED=1
+                session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+            elif [ "$PROT" = "mesi2_inc_bdi" ]; then
                 L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                 L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                 session_name=restore_spec${ff}_${detailed}${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region

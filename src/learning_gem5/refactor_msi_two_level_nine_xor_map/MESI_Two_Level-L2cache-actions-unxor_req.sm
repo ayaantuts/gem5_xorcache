@@ -1,0 +1,279 @@
+  action(sendUnxorwbreq_1self, "unxorwbreqSelf1", desc="send unxorwbreq due to myself's triggering action") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceRequestType:UNXORWB;
+        out_msg.Requestor := in_msg.Requestor;
+        out_msg.Destination.add(cache_entry.Sharers.newestElement());
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+        DPRINTF(RubySlicc, "sendUnxorwbreq_1self: send UNXORWB to %s\n", out_msg.Destination);
+      }
+    }
+  }
+  action(sendUnxorwbreq_1other, "unxorwbreqOther1", desc="send unxorwbreq due to partner's triggering action") {
+    assert(L2cache.isSecondaryAddr(address) == true);
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := primary_addr;
+        out_msg.Type := CoherenceRequestType:UNXORWB;
+        out_msg.Requestor := in_msg.Requestor;
+        out_msg.Destination.add(cache_entry.Sharers.newestElement());
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+        DPRINTF(RubySlicc, "sendUnxorwbreq_1other: send UNXORWB to %s\n", out_msg.Destination);
+      }
+    }
+  }
+
+  action(sendUnxorwbreq_2self, "unxorwbreqSelf2", desc="send unxorwbreq due to myself's triggering action") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceRequestType:UNXORWB;
+        out_msg.Requestor := in_msg.Requestor;
+        out_msg.Destination.add(cache_entry.Sharers2.newestElement());
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+        DPRINTF(RubySlicc, "sendUnxorwbreq_1self: send UNXORWB to %s\n", out_msg.Destination);
+      }
+    }
+  }
+  action(sendUnxorwbreq_2other, "unxorwbreqOther2", desc="send unxorwbreq due to partner's triggering action") {
+    assert(L2cache.hasSecondaryAddr(address) == true);
+    Addr secondary_addr := L2cache.getSecondaryAddr(address);
+
+    peek(L1RequestL2Network_in, RequestMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := secondary_addr;
+        out_msg.Type := CoherenceRequestType:UNXORWB;
+        out_msg.Requestor := in_msg.Requestor;
+        out_msg.Destination.add(cache_entry.Sharers2.newestElement());
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+        DPRINTF(RubySlicc, "sendUnxorwbreq_2other: send UNXORWB to %s\n", out_msg.Destination);
+      }
+    }
+  }
+
+  action(mpresp_processWriteDataToCache_fromresp, "mpresp", desc="process and write data from response queue to cache") {
+    peek(responseL2Network_in, ResponseMsg) {
+      assert(is_valid(cache_entry));
+
+      DPRINTF(RubySlicc, "1.cache_entry.DataBlk_phy before xor: %s\n", cache_entry.DataBlk_phy);
+      DPRINTF(RubySlicc, "2.xorer: %s\n", in_msg.DataBlk);
+      DataBlock newData := dataProc.preprocess(cache_entry.DataBlk_phy, in_msg.DataBlk);
+      cache_entry.DataBlk_phy := newData;
+      DPRINTF(RubySlicc, "3.cache_entry.DataBlk_phy after xor: %s\n", cache_entry.DataBlk_phy);
+    }
+  }
+  action(mresp_writeDataToCache_fromresp, "mresp", desc=" write data from response queue to cache") {
+    peek(responseL2Network_in, ResponseMsg) {
+      assert(is_valid(cache_entry));
+      // assert (in_msg.Dirty == false);
+      cache_entry.DataBlk_phy := in_msg.DataBlk;
+      DPRINTF(RubySlicc, "dirty: %d, cache_entry.DataBlk_phy: %s\n", cache_entry.Dirty, cache_entry.DataBlk_phy);
+    }
+  }
+
+  
+  action(eea1_sendIncomingDataToGetXRequestor_withackct, "eea1", desc="Send data from cache to GetX ID with ack count") {
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()+dataProc.decompress()) {
+        assert(is_valid(TBEs[primary_addr]));
+        assert(is_valid(cache_entry));
+        out_msg.addr := primary_addr;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(TBEs[primary_addr].L1_GetX_ID);
+        DPRINTF(RubySlicc, "%s\n", out_msg.Destination);
+        out_msg.DataBlk := in_msg.DataBlk;
+        DPRINTF(RubySlicc, "Address: %#x, Destination: %s, DataBlock: %s\n",
+                out_msg.addr, out_msg.Destination, out_msg.DataBlk);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.l2_hit_miss_path := L2HitMissPath:MISS;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers.count();
+        if (cache_entry.Sharers.isElement(TBEs[primary_addr].L1_GetX_ID)) {
+          out_msg.AckCount := out_msg.AckCount + 1;
+        }
+      }
+    }
+  }
+  action(eea2_sendIncomingDataToGetXRequestor_withackct, "eea2", desc="Send data from cache to GetX ID with ack count") {
+    assert(L2cache.hasSecondaryAddr(address) == true);
+    Addr secondary_addr := L2cache.getSecondaryAddr(address);
+
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()+dataProc.decompress()) {
+        assert(is_valid(TBEs[secondary_addr]));
+        assert(is_valid(cache_entry));
+        out_msg.addr := secondary_addr;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(TBEs[secondary_addr].L1_GetX_ID);
+        DPRINTF(RubySlicc, "%s\n", out_msg.Destination);
+        out_msg.DataBlk := in_msg.DataBlk;
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.l2_hit_miss_path := L2HitMissPath:MISS;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers2.count();
+        if (cache_entry.Sharers2.isElement(TBEs[secondary_addr].L1_GetX_ID)) {
+          out_msg.AckCount := out_msg.AckCount + 1;
+          DPRINTF(RubySlicc, "one less ack needed\n");
+        }
+        DPRINTF(RubySlicc, "ackneeded:%d, Address: %#x, Destination: %s, DataBlock: %s\n",
+                out_msg.AckCount, out_msg.addr, out_msg.Destination, out_msg.DataBlk);
+      }
+    }
+  }
+
+  action(eeap1_sendProcessedDataToGetXRequestor_withackct, "eeap1", desc="Send processed data from cache to GetX ID with ack count") {
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+    
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()+dataProc.decompress()) {
+        assert(is_valid(TBEs[primary_addr]));
+        assert(is_valid(cache_entry));
+        out_msg.addr := primary_addr;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(TBEs[primary_addr].L1_GetX_ID);
+        DPRINTF(RubySlicc, "%s\n", out_msg.Destination);
+
+        DataBlock newData := dataProc.preprocess(cache_entry.DataBlk_phy, in_msg.DataBlk);
+        out_msg.DataBlk := newData;
+
+        DPRINTF(RubySlicc, "Address: %#x, Destination: %s, DataBlock: %s\n",
+                out_msg.addr, out_msg.Destination, out_msg.DataBlk);
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.l2_hit_miss_path := L2HitMissPath:MISS;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers.count();
+        if (cache_entry.Sharers.isElement(TBEs[primary_addr].L1_GetX_ID)) {
+          out_msg.AckCount := out_msg.AckCount + 1;
+        }
+      }
+    }
+  }
+  action(eeap2_sendProcessedDataToGetXRequestor_withackct, "eeap2", desc="Send processed data from cache to GetX ID with ack count") {
+    assert(L2cache.hasSecondaryAddr(address) == true);
+    Addr secondary_addr := L2cache.getSecondaryAddr(address);
+
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()+dataProc.decompress()) {
+        assert(is_valid(TBEs[secondary_addr]));
+        assert(is_valid(cache_entry));
+        out_msg.addr := secondary_addr;
+        out_msg.Type := CoherenceResponseType:DATA;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(TBEs[secondary_addr].L1_GetX_ID);
+        DPRINTF(RubySlicc, "%s\n", out_msg.Destination);
+
+        DataBlock newData := dataProc.preprocess(cache_entry.DataBlk_phy, in_msg.DataBlk);
+        out_msg.DataBlk := newData;
+
+        out_msg.MessageSize := MessageSizeType:Response_Data;
+        out_msg.l2_hit_miss_path := L2HitMissPath:MISS;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers2.count();
+        if (cache_entry.Sharers2.isElement(TBEs[secondary_addr].L1_GetX_ID)) {
+          out_msg.AckCount := out_msg.AckCount + 1;
+          DPRINTF(RubySlicc, "one less ack needed\n");
+        }
+        DPRINTF(RubySlicc, "ackneeded:%d, Address: %#x, Destination: %s, DataBlock: %s\n",
+                out_msg.AckCount, out_msg.addr, out_msg.Destination, out_msg.DataBlk);
+      }
+    }
+  }
+  
+
+  action(tx1_sendInvAckToGetXRequestor, "tx1", desc="Send ack ct from cache to GetX ID with ack count") {
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()+dataProc.decompress()) {
+        assert(is_valid(TBEs[primary_addr]));
+        assert(is_valid(cache_entry));
+        out_msg.addr := primary_addr;
+        out_msg.Type := CoherenceResponseType:ACK;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(TBEs[primary_addr].L1_GetX_ID);
+        out_msg.MessageSize := MessageSizeType:Response_Control;
+        out_msg.l2_hit_miss_path := L2HitMissPath:MISS;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers.count() + 1;
+        DPRINTF(RubySlicc, "ackneeded:%d, Address: %#x, Destination: %s\n",
+                out_msg.AckCount, out_msg.addr, out_msg.Destination);
+      }
+    }
+  }
+  action(tx2_sendInvAckToGetXRequestor, "tx2", desc="Send data from cache to GetX ID with ack count") {
+    assert(L2cache.hasSecondaryAddr(address) == true);
+    Addr secondary_addr := L2cache.getSecondaryAddr(address);
+
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(responseL2Network_out, ResponseMsg, L2cache.getDataLatency()+dataProc.decompress()) {
+        assert(is_valid(TBEs[secondary_addr]));
+        assert(is_valid(cache_entry));
+        out_msg.addr := secondary_addr;
+        out_msg.Type := CoherenceResponseType:ACK;
+        out_msg.Sender := machineID;
+        out_msg.Destination.add(TBEs[secondary_addr].L1_GetX_ID);
+        out_msg.MessageSize := MessageSizeType:Response_Control;
+        out_msg.l2_hit_miss_path := L2HitMissPath:MISS;
+
+        out_msg.AckCount := 0 - cache_entry.Sharers2.count() + 1;
+        DPRINTF(RubySlicc, "ackneeded:%d, Address: %#x, Destination: %s\n",
+                out_msg.AckCount, out_msg.addr, out_msg.Destination);
+      }
+    }
+  }
+
+
+  action(fwmresp_sendFwdInvToSharersMinusRequestor_fromresp, "fwmresp", desc="invalidate sharers for request, requestor is sharer") {
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := address;
+        out_msg.Type := CoherenceRequestType:INV;
+        out_msg.Requestor := tbe.L1_GetX_ID;
+        out_msg.Destination := cache_entry.Sharers;
+        out_msg.Destination.remove(tbe.L1_GetX_ID);
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+      }
+    }
+  }
+  action(fwmresp2_sendFwdInvToSharersMinusRequestor_fromresp, "fwmresp2", desc="invalidate sharers for request, requestor is sharer") {
+    assert(L2cache.hasSecondaryAddr(address) == true);
+    Addr secondary_addr := L2cache.getSecondaryAddr(address);
+
+    peek(responseL2Network_in, ResponseMsg) {
+      enqueue(L1RequestL2Network_out, RequestMsg, dir.getDataLatency()) {
+        assert(is_valid(cache_entry));
+        out_msg.addr := secondary_addr;
+        out_msg.Type := CoherenceRequestType:INV;
+        out_msg.Requestor := TBEs[secondary_addr].L1_GetX_ID;
+        out_msg.Destination := cache_entry.Sharers2;
+        out_msg.Destination.remove(TBEs[secondary_addr].L1_GetX_ID);
+        out_msg.MessageSize := MessageSizeType:Request_Control;
+        DPRINTF(RubySlicc, "send out inv, Address: %#x, Destination: %s\n",
+              out_msg.addr, out_msg.Destination);
+      }
+    }
+  }
+
+  action(xx2_recordGetXL1ID, "\x2", desc="Record L1 GetX for store response") {
+    assert(L2cache.hasSecondaryAddr(address) == true);
+    Addr secondary_addr := L2cache.getSecondaryAddr(address);
+    assert(is_valid(getCacheEntry(secondary_addr)));
+
+    peek(L1RequestL2Network_in, RequestMsg) {
+      assert(is_valid(TBEs[secondary_addr]));
+      TBEs[secondary_addr].L1_GetX_ID := in_msg.Requestor;
+    }
+  }

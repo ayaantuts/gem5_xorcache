@@ -395,7 +395,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache EXC")
             } else {
               trigger(Event:Ack, in_msg.addr, cache_entry, tbe);
             }
-          } else if (in_msg.Type == CoherenceResponseType:ACKDATA) {
+          } else if (in_msg.Type == CoherenceResponseType:ACKDATA) { // from a random sharer
             if ((getPendingAcks(tbe) - in_msg.AckCount) == 0) {
               trigger(Event:Ack_Data_all, in_msg.addr, cache_entry, tbe);
             } else {
@@ -529,7 +529,6 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache EXC")
         out_msg.Destination.add(mapAddressToMachine(address, MachineType:Directory));
         out_msg.MessageSize := MessageSizeType:Control;
         out_msg.AccessMode := in_msg.AccessMode;
-        out_msg.Prefetch := in_msg.Prefetch;
       }
     }
   }
@@ -701,7 +700,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache EXC")
       out_msg.MessageSize := MessageSizeType:Request_Control;
     }
   }
-  action(fd_sendInvToSharers_sendInvData, "fd", desc="invalidate sharers for L2 replacement") {
+  action(fd_sendInvToSharers_sendInvData, "fd", desc="FOR EVICTION: invalidate sharers for L2 replacement") {
     NetDest sharers := cache_entry.Sharers;
     MachineID randSharer := sharers.randElement();
 
@@ -725,7 +724,7 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache EXC")
     }
   }
 
-  action(fwmd_sendFwdInvToSharersMinusRequestor_sendInvData, "fwmd", desc="invalidate sharers for request, requestor is sharer") {
+  action(fwmd_sendFwdInvToSharersMinusRequestor_sendInvData, "fwmd", desc="FOR UPGRADE: invalidate sharers for request, requestor is sharer") {
     peek(L1RequestL2Network_in, RequestMsg) {
       NetDest sharersMinusRequestor := cache_entry.Sharers;
       sharersMinusRequestor.remove(in_msg.Requestor);
@@ -1072,12 +1071,12 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache EXC")
     jj_popL1RequestQueue;
   }
 
-  transition({NP, SS, L2ONLY, MT, M_I, I_I, S_I, IS, IM, MT_IB, MT_SB}, L1_PUTX_old) {
+  transition({NP, SS, L2ONLY, MT, M_I, I_I, S_I, IS, IM, MT_IB}, L1_PUTX_old) {
     t_sendWBAck;
     jj_popL1RequestQueue;
   }
 
-  transition({NP, SS, L2ONLY, MT, M_I, I_I, S_I, IS, IM, MT_IB, MT_SB}, L1_PUTS_old) {
+  transition({NP, SS, L2ONLY, MT, M_I, I_I, S_I, IS, IM, MT_IB}, L1_PUTS_old) {
     t_sendWBAck;
     jj_popL1RequestQueue;
   }
@@ -1204,6 +1203,9 @@ machine(MachineType:L2Cache, "MSI Directory L2 Cache EXC")
   }
   
   transition({SS_SB,I_SB}, {L1_GETX, L1_UPGRADE, L1_PUTS_last,L1_PUTS_not_last,L1_PUTS_old, L1_PUTX_old,L1_PUTX_not_last}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition(MT_SB, {L1_PUTS_old, L1_PUTX_old}) {
     zz_stallAndWaitL1RequestQueue;
   }
   transition(I_SB, {L1_GETS, L1_GET_INSTR}) {

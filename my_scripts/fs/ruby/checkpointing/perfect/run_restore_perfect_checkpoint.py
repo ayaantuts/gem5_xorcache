@@ -32,6 +32,12 @@ parser.add_argument(
     nargs='+',
 )
 parser.add_argument(
+    "--dfile",
+    type=str,
+    required=False,
+    help="debug file",
+)
+parser.add_argument(
     "--begin",
     type=int,
     required=False,
@@ -99,7 +105,7 @@ parser.add_argument(
     required=False,
     default="256kB",
     help="l2size string",
-    choices=["32kB", "64kB", "128kB","256kB","512kB", "1024kB", "2048kB"],
+    choices=["32kB", "64kB", "128kB","256kB","512kB", "1024kB", "1408kB", "2048kB"],
 )
 parser.add_argument(
     "--xor_folding_scheme",
@@ -160,6 +166,9 @@ parser.add_argument(
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
 
              "msi_exc_nobdi", "msi_exc_bdi",
+             "mesi2_inc_nobdi", "mesi2_inc_bdi",
+
+             "msi_nine_noxor_nobdi_map3", "msi_nine_xor_bdi_map3", "msi_nine_noxor_bdi_map3", "msi_nine_xor_nobdi_map3",
              ],
     required=True,
 )
@@ -224,6 +233,13 @@ parser.add_argument(
     default=True,
     help="by default, we use hook to annotate ROI",
 )
+parser.add_argument(
+    "--disassemble",
+    type=bool,
+    required=False,
+    default=False,
+    help="by default, we do not disassemble",
+)
 args = parser.parse_args()
 
 assert args.hook
@@ -233,6 +249,9 @@ debug_flag = ""
 if args.flags:
     debug_flag = "--debug-flags="
     debug_flag += ",".join(args.flags)
+    if args.dfile:
+        debug_flag += f" --debug-file={args.dfile}"
+
 
 debug_interval = ""
 if args.begin and args.end:
@@ -240,7 +259,8 @@ if args.begin and args.end:
     debug_interval = f'--debug-start={interval[0]} --debug-end={interval[1]}'
 
 if args.protocol == "baseline":
-    design = "test"
+    design = ""
+    design_out = "baseline"
 elif args.protocol == "noisy":
     design = "MyMESI2"
     design_out = "MyMESI2_Noisy"
@@ -271,6 +291,7 @@ elif args.protocol == "msi_nine_xor":
 elif args.protocol == "msi_nine_noxor":
     design = "MyMSI_NINE_XOR"
     design_out = "MyMSI_NINE_NOXOR"
+
 elif args.protocol == "msi_nine_xor_bdi_map":
     design = "MyMSI_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_XOR_BDI_MAP"
@@ -283,12 +304,33 @@ elif args.protocol == "msi_nine_noxor_bdi_map":
 elif args.protocol == "msi_nine_noxor_nobdi_map":
     design = "MyMSI_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP"
+
+elif args.protocol == "msi_nine_xor_bdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_XOR_BDI_MAP3"
+elif args.protocol == "msi_nine_xor_nobdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_XOR_NOBDI_MAP3"
+elif args.protocol == "msi_nine_noxor_bdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_BDI_MAP3"
+elif args.protocol == "msi_nine_noxor_nobdi_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP3"
+
 elif args.protocol == "msi_exc_nobdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_NOBDI"
 elif args.protocol == "msi_exc_bdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_BDI"
+
+elif args.protocol == "mesi2_inc_nobdi":
+    design = "MyMESI2_INC_INTRACOMP"
+    design_out = "MyMESI2_INC_NOBDI"
+elif args.protocol == "mesi2_inc_bdi":
+    design = "MyMESI2_INC_INTRACOMP"
+    design_out = "MyMESI2_INC_BDI"
 elif re.search("xor_(\d)(\d)(\d)",args.protocol): 
     design = "MyMESI2_BDI_XOR"
     design_out = "MyMESI2_XOR"
@@ -326,13 +368,18 @@ else:
 
 
 if args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_noxor_bdi_map" or \
-    args.protocol == "msi_nine_xor_nobdi_map" or args.protocol == "msi_exc_bdi":
+    args.protocol == "msi_nine_xor_nobdi_map" or \
+    args.protocol == "msi_nine_xor_bdi_map3" or args.protocol == "msi_nine_noxor_bdi_map3" or \
+    args.protocol == "msi_nine_xor_nobdi_map3" or \
+    args.protocol == "msi_exc_bdi":
     ratio = args.l2factor
     ratio_str = f"_ratio{ratio}"
 else:
     ratio_str = ""
 
-if args.protocol == "msi_nine_noxor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_exc_bdi":
+if args.protocol == "msi_nine_noxor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map" or \
+    args.protocol == "msi_nine_noxor_bdi_map3" or args.protocol == "msi_nine_xor_bdi_map3" or \
+    args.protocol == "msi_exc_bdi":
     region = args.l2_data_regions
     region_str = f"_{region}region"
     seg = args.l2_data_segment_size
@@ -351,7 +398,7 @@ elif args.xor_folding_scheme == 2:
     transition_mapbit_str += "_hycomp"
 else: assert False
 
-if args.protocol == "msi_nine_xor_bdi_map" and args.index_bits_shift != 0:
+if (args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3") and args.index_bits_shift != 0:
     transition_mapbit_str += f"_idxshift{args.index_bits_shift}"
 
 path = f"m5out/m5out_{testname}/{folder_name}/{design_out}_{args.l2size}{ratio_str}{seg_str}{region_str}{transition_mapbit_str}/c{args.core}/{args.benchmark}"
@@ -366,6 +413,8 @@ if args.fast == True:
     gem5_binary = f"build/X86_{design}/gem5.fast"
 else:
     gem5_binary = f"build/X86_{design}/gem5.opt"
+if design == "":
+    gem5_binary = f"build/X86/gem5.opt"
 
 if not os.path.isfile(gem5_binary): 
     logger.error(f"gem5 binary file ({gem5_binary}) not exist!")
@@ -388,19 +437,20 @@ cmd_list[0] += f" --l2_map_bits {args.l2_map_bits}"
 cmd_list[0] += f" --l2_num_maptable_set {args.l2_num_maptable_set}"
 cmd_list[0] += f" --l2_list_capacity {args.l2_list_capacity}"
 
-if args.protocol == "msi_nine_xor_bdi_map":
+if args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3":
     cmd_list[0] += f" --l2factor_xor_bdi {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
     cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
-elif args.protocol == "msi_nine_noxor_bdi_map":
+elif args.protocol == "msi_nine_noxor_bdi_map" or args.protocol == "msi_nine_noxor_bdi_map3":
     cmd_list[0] += f" --l2factor_bdi {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
     cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
-elif args.protocol == "msi_nine_xor_nobdi_map":
+elif args.protocol == "msi_nine_xor_nobdi_map" or args.protocol == "msi_nine_xor_nobdi_map3":
     cmd_list[0] += f" --l2factor_xor {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size 64"
-elif args.protocol == "msi_nine_noxor_nobdi_map":
+elif args.protocol == "msi_nine_noxor_nobdi_map" or args.protocol == "msi_nine_noxor_nobdi_map3":
     cmd_list[0] += f" --l2_data_segment_size 64"
+
 elif args.protocol == "msi_exc_nobdi":
     cmd_list[0] += f" --l2_data_segment_size 64"
     cmd_list[0] += f" --l2_data_regions 1"
@@ -409,7 +459,15 @@ elif args.protocol == "msi_exc_bdi":
     cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
     cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
 
-if args.protocol == "msi_nine_xor_bdi_map":
+elif args.protocol == "mesi2_inc_nobdi":
+    cmd_list[0] += f" --l2_data_segment_size 64"
+    cmd_list[0] += f" --l2_data_regions 1"
+elif args.protocol == "mesi2_inc_bdi":
+    cmd_list[0] += f" --l2factor_bdi {args.l2factor}"
+    cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
+    cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
+
+if args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3":
     cmd_list[0] += f" --index_bits_shift {args.index_bits_shift}"
 else:
     cmd_list[0] += f" --index_bits_shift 0"
@@ -424,6 +482,8 @@ if args.record_line_level_entropy == True:
 if args.xor_folding_scheme:
     cmd_list[0] += f" --xor_folding_scheme {args.xor_folding_scheme}"
 
+if args.disassemble == True:
+    cmd_list[0] += f" --disassemble"
 
 # expand ~ dir
 if args.image_path_override:

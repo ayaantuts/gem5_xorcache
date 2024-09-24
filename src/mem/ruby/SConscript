@@ -134,7 +134,19 @@ if env['PROTOCOL'] == 'MSI_Two_Level_NINE_XOR_MAP':
     MakeInclude('structures/mystructures/msi/DirectMapTable.hh')
     MakeInclude('structures/mystructures/msi/AssociativeMapTable.hh')
     MakeInclude('structures/mystructures/msi/EntropyProfiler.hh')
-if env['PROTOCOL'] == 'MSI_Two_Level_EXC':
+if env['PROTOCOL'] == 'MSI_Three_Level_NINE_XOR_MAP':
+    MakeInclude('structures/mystructures/msi/CacheMemoryDualAddr.hh')
+    MakeInclude('structures/mystructures/msi/CacheMemoryProbe.hh')
+    MakeInclude('structures/mystructures/msi/CacheMemoryFASector.hh')
+    MakeInclude('structures/mystructures/msi/CacheMemoryRegionSector.hh')
+    MakeInclude('structures/mystructures/msi/CacheMemorySASector.hh')
+    MakeInclude('structures/mystructures/msi/CacheMemoryDecoupledTagData.hh')
+    MakeInclude('structures/mystructures/msi/CacheMemoryXOR.hh')
+    MakeInclude('structures/mystructures/msi/DataProc.hh')
+    MakeInclude('structures/mystructures/msi/DirectMapTable.hh')
+    MakeInclude('structures/mystructures/msi/AssociativeMapTable.hh')
+    MakeInclude('structures/mystructures/msi/EntropyProfiler.hh')
+if env['PROTOCOL'] == 'MSI_Two_Level_EXC' or env['PROTOCOL'] == 'MESI_Two_Level_inc_intracomp':
     MakeInclude('structures/mystructures/msi/CacheMemoryRegionSector.hh')
     MakeInclude('structures/mystructures/msi/DataProc.hh')
 if env['PROTOCOL'] == 'MSI_Two_Level_NINE_XOR_MAP_THESAURUS':

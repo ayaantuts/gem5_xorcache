@@ -1,0 +1,65 @@
+// transition 2 in fig 5
+
+  transition(SS, L1_PUTX_XOR, SS_L2ONLY) { 
+    check_phy;
+    dddir_deallocateDir;
+    aatns_allocateTagNS;
+    aat_allocateTag;
+    ddststs1_deallocateSTSTS;
+    dmt_rm1;
+    dmtS_rm1;
+    ddl2_deallocateL2CacheBlock;
+    
+    lls_clearSecondarySharers;
+
+    mlr2_writeLogicalDataToCacheFromRequest;
+
+    entropy_rm_xor_data;
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data2;
+    
+    mpxr_writePhyDataToCache_XOR_fromRequest_compress_update;
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    t_sendWBAck;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+
+  // transition(MT_SB, L1_PUTX_XOR, MTSB_L2ONLY) {
+  //   check_phy;
+  //   dddir_deallocateDir;
+  //   aatns_allocateTagNS;
+  //   aat_allocateTag;
+  //   // ddststs1_deallocateSTSTS;
+  //   dmt_rm1;
+  //   dmtS_rm1;
+  //   ddl2_deallocateL2CacheBlock;
+    
+  //   lls_clearSecondarySharers;
+
+  //   mlr2_writeLogicalDataToCacheFromRequest; 
+
+  //   entropy_rm_xor_data;
+  //   entropyRaw_reg_primary_data;
+  //   entropyRaw_reg_secondary_data2;
+
+  //   mpxr_writePhyDataToCache_XOR_fromRequest_compress_update;
+  //   entropy_reg_xor_data;
+  //   entropyXOR_reg_xor_data;
+    
+  //   t_sendWBAck;
+  //   jj_popL1RequestQueue;
+
+  //   uur_profileDirRead;
+  //   uur_profileDMTRead;
+  //   uur_profileTagRead;
+  //   uur_profileDataRead;
+  //   uur_profileDataRead;
+  // }

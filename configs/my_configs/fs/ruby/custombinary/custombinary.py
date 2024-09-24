@@ -47,6 +47,7 @@ from m5.util import warn
 from m5.util import fatal
 
 benchmark_choices = [
+    "int_vector_avg",
     "MGS",
     "MGSM",
     "MGSL",
@@ -333,6 +334,8 @@ if args.protocol == "baseline":
         l2_size="256kB",
         l2_assoc=16,
         num_l2_banks=2,
+        l2_data_lat=2,
+        l2_tag_lat=2,
     )
 elif args.protocol == "msi":
     from gem5.components.cachehierarchies.ruby.msi_two_level_cache_hierarchy import (
@@ -627,6 +630,8 @@ board = X86Board(
 
 out = f'cd /home/gem5/microbench;\n' \
         f'echo "{args.benchmark} starts :)";\ncd {args.benchmark};\n' \
+        f'objdump -D -S bench.{args.suffix} > {args.benchmark}.dis\n' \
+        f'm5 writefile {args.benchmark}.dis\n' \
         f'm5 exit;\n' \
         f'./bench.{args.suffix};\n' \
         f'echo "{args.benchmark} ends :)";\n' \

@@ -33,13 +33,13 @@ else
     home=""
 fi
 declare -a bench=(
-    "blackscholes" 
+    # "blackscholes" 
     # "bodytrack" 
     # "canneal" 
     # "dedup" 
     # "facesim" 
     # "ferret" 
-    # "fluidanimate" 
+    "fluidanimate" 
     # "freqmine" 
     # "raytrace" 
     # "streamcluster" 
@@ -56,13 +56,21 @@ core=(
 suite="all"
 
 declare -a protocol=(
-     "msi_nine_xor_bdi_map"
+    #  "msi_nine_xor_bdi_map"
     #  "msi_nine_noxor_bdi_map"
     #  "msi_nine_xor_nobdi_map"
     #  "msi_nine_noxor_nobdi_map"
 
+     "msi_nine_xor_bdi_map3"
+    #  "msi_nine_noxor_bdi_map3"
+    #  "msi_nine_xor_nobdi_map3"
+    #  "msi_nine_noxor_nobdi_map3"
+
     # "msi_exc_nobdi"
     # "msi_exc_bdi"
+
+    # "mesi2_inc_nobdi"
+    # "mesi2_inc_bdi"
 )
 
 ratio=2.5
@@ -81,7 +89,7 @@ L2_DATA_SEGEMENT_SIZE=8
 L2_TRANSITIONS_PER_CYCLE=1024
 L2_DATA_REGIONS=32
 
-INDEX_SHIFT_BITS=3
+INDEX_SHIFT_BITS=0
 
 case $1 in
   1) echo "oppurtunistic"
@@ -202,17 +210,18 @@ line_entropy=""
 
 l2=(
     # 32
-    64
+    # 64
     # 128
     # 256
     # 512
     # 1024
+    1408
     # 2048
 )
 
 debug=""
 
-# debug="--begin 22184081679933 --end 22284081679933 --flags ProtocolTrace,RubyGenerated,RubySlicc,RubyReplacement"
+debug="--begin 18657334935377 --end 18657334945378 --flags ProtocolTrace,RubyGenerated,RubySlicc"
 
 
 for L2SIZE in ${l2[@]};do
@@ -221,27 +230,37 @@ for L2SIZE in ${l2[@]};do
             do
                 for BEN in "${bench[@]}"
                 do
-                    if [ "$PROT" = "msi_nine_noxor_nobdi_map" ]; then
+                    if [[ "$PROT" = "msi_nine_noxor_nobdi_map" || "$PROT" = "msi_nine_noxor_nobdi_map3" ]]; then
                         session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
                         L2_DATA_REGIONS_USED=1
                         L2_DATA_SEGEMENT_SIZE_USED=1
-                    elif [ "$PROT" = "msi_nine_noxor_bdi_map" ]; then
+                    elif [[ "$PROT" = "msi_nine_noxor_bdi_map" || "$PROT" = "msi_nine_noxor_bdi_map3" ]]; then
                         L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                         L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                         session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_text}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
-                    elif [ "$PROT" = "msi_nine_xor_nobdi_map" ]; then
+                    elif [[ "$PROT" = "msi_nine_xor_nobdi_map" || "$PROT" = "msi_nine_xor_nobdi_map3" ]]; then
                         L2_DATA_REGIONS_USED=1
                         L2_DATA_SEGEMENT_SIZE_USED=1
                         session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_text}_${L2_TRANSITIONS_PER_CYCLE}t_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}
-                    elif [ "$PROT" = "msi_nine_xor_bdi_map" ]; then
+                    elif [[ "$PROT" = "msi_nine_xor_bdi_map" || "$PROT" = "msi_nine_xor_bdi_map3" ]]; then
                         L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                         L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                         session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_text}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}_${INDEX_SHIFT_BITS}shift
+                    
                     elif [ "$PROT" = "msi_exc_nobdi" ]; then
                         L2_DATA_REGIONS_USED=1
                         L2_DATA_SEGEMENT_SIZE_USED=1
                         session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
                     elif [ "$PROT" = "msi_exc_bdi" ]; then
+                        L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
+                        L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
+                        session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
+                    
+                    elif [ "$PROT" = "mesi2_inc_nobdi" ]; then
+                        L2_DATA_REGIONS_USED=1
+                        L2_DATA_SEGEMENT_SIZE_USED=1
+                        session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+                    elif [ "$PROT" = "mesi2_inc_bdi" ]; then
                         L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                         L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
                         session_name=restore_parsec_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region

@@ -1,0 +1,893 @@
+//  ==== GETX ====
+
+  /////////////////////////////////// SS_SS ///////////////////////////////////
+  transition(SS_SS, L1_GETX_self, SS_SS_unxorwbdata1) {
+    // primary SS->MT
+    // secondary SS
+    // secondary data is staying
+
+    // primary gets GETX (event is on 1)
+    i_allocateTBE;
+    xx_recordGetXL1ID;
+
+    // primary is the one should send out UNXORWB (state SS is on 1)
+    sendUnxorwbreq_1self;
+
+    // secondary is staying (event is on 1)
+    expand_data1; // overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    // primary SS (tag, data, dir) is accessed (event is on 1)
+    set_dirMRU;
+
+    uu_profileHit; // TOFIX: is this hit?
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS_unxorwbdata1, UNXORWB_Data, SS_OR_MT_MB) {
+    // primary SS->MT
+    // secondary SS
+    // secondary data is staying
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (primary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp;  // primary dirty dont care
+
+    // secondary is staying
+    update_data2;
+
+    // entropy calculation: secondary is staying
+    entropy_reg_secondary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate SS tag and data (state 1: primary is upgrading)
+    ddt_deallocateTag;
+
+    // primary send data (state 1: primary is upgrading)
+    // send raw data (primary comes back and no need to xor)
+    eea1_sendIncomingDataToGetXRequestor_withackct;
+
+    // primary send inv (primary is in SS) (state 1: primary is upgrading)
+    fwmresp_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // primary SS(tag, data dir) accessed (event is on 1 since SS is on 1)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, secondary (SS) is staying
+    aaststs2_allocateSingularTagBoth_secondary;
+    dmt_insert_fromCache2;
+    l2a2_allocateL2;
+
+    l2set2_ss;
+    set_primary_as_cache_entry;
+    ooo_run_xor2;
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  transition(SS_SS, L1_UPGRADE_self, SS_SS_unxorwbdata1_ug) {
+    // primary SS->MT
+    // secondary SS
+    // secondary data is staying
+
+    // primary gets GETX (event is on 1)
+    i_allocateTBE;
+    xx_recordGetXL1ID;
+
+    // primary is the one should send out UNXORWB (state SS is on 1)
+    sendUnxorwbreq_1self;
+
+    // secondary is staying (event is on 1)
+    expand_data1; // overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    // primary SS (tag, data, dir) is accessed (event is on 1)
+    set_dirMRU;
+
+    uu_profileMissCoh;
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS_unxorwbdata1_ug, UNXORWB_Data, SS_OR_MT_MB) {
+    // primary SS->MT
+    // secondary SS
+    // secondary data is staying
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (primary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp;  // primary dirty dont care
+
+    // secondary is staying
+    update_data2;
+
+    // entropy calculation: secondary is staying
+    entropy_reg_secondary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate SS tag and data (state 1: primary is upgrading)
+    ddt_deallocateTag;
+
+    // primary send ack only as this is upgrade (state 1: primary is upgrading)
+    tx1_sendInvAckToGetXRequestor;
+
+    // primary send inv (primary is in SS) (state 1: primary is upgrading)
+    fwmresp_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // primary SS(tag, data dir) accessed (event is on 1 since SS is on 1)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, secondary (SS) is staying
+    aaststs2_allocateSingularTagBoth_secondary;
+    dmt_insert_fromCache2;
+    l2a2_allocateL2;
+
+    l2set2_ss;
+    set_primary_as_cache_entry;
+    ooo_run_xor2;
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+
+  transition(SS_SS, L1_GETX2_self, SS_SS_unxorwbdata2) {
+    // primary SS
+    // secondary SS->MT
+    // primary data is staying
+
+    // secondary gets GETX (event is on 2)
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    xx2_recordGetXL1ID;
+
+    // SS->MT is on secondary, dont need to allocate dir
+    // aadir_allocateDir;
+
+    // secondary is the one should send out UNXORWB (state SS is on 2)
+    sendUnxorwbreq_2self;
+
+    // primary is staying (event is on 2)
+    expand_data1; // overprovision
+
+    // secondary SS (tag, data) is accessed (event is on 2)
+    set_tagMRU;
+
+    uu_profileHit; // TOFIX: is this hit?
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS_unxorwbdata2, UNXORWB_Data2, SS_OR_MT_MB) {
+    // primary SS
+    // secondary SS->MT
+    // primary data is staying 
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (secondary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp; // secondary dirty dont care
+
+    // primary is staying
+    update_data1;
+
+    // entropy calculation: primary is staying
+    entropy_reg_primary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate secondary(SS) tag and data (state 2: secondary is upgrading)
+    ddt2_deallocateTag;
+
+    // secondary send data (state 2: secondary is upgrading)
+    // send raw data (secondary comes back and no need to xor)
+    eea2_sendIncomingDataToGetXRequestor_withackct;
+
+    // secondary is in SS, so send inv (state 2: secondary is upgrading)
+    fwmresp2_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // secondary SS(tag, data dir) accessed (event is on 2 since SS is on 2)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, primary (SS) is staying
+    aaststs1_allocateSingularTagBoth_primary;
+    dmt_insert_fromCache1;
+
+    l2a2_allocateL2;
+
+    // 2 naturally transits, 1 needs to be set (event is on 2 since SS is on 2)
+    l2set1_ss; 
+    set_secondary_as_cache_entry;
+
+    // unxoring, primary (SS) is staying
+    ooo_run_xor1;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  transition(SS_SS, L1_UPGRADE2_self, SS_SS_unxorwbdata2_ug) {
+    // primary SS
+    // secondary SS->MT
+    // primary data is staying
+
+    // secondary gets GETX (event is on 2)
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    xx2_recordGetXL1ID;
+
+    // SS->MT is on secondary, dont need to allocate dir
+    // aadir_allocateDir;
+
+    // secondary is the one should send out UNXORWB (state SS is on 2)
+    sendUnxorwbreq_2self;
+
+    // primary is staying (event is on 2)
+    expand_data1; // overprovision
+
+    // secondary SS (tag, data) is accessed (event is on 2)
+    set_tagMRU;
+
+    uu_profileMissCoh; 
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS_unxorwbdata2_ug, UNXORWB_Data2, SS_OR_MT_MB) {
+    // primary SS
+    // secondary SS->MT
+    // primary data is staying 
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (secondary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp; // secondary dirty dont care
+
+    // primary is staying
+    update_data1;
+
+    // entropy calculation: primary is staying
+    entropy_reg_primary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate secondary(SS) tag and data (state 2: secondary is upgrading)
+    ddt2_deallocateTag;
+
+    // secondary send ack only since this is upgrade (state 2: secondary is upgrading)
+    tx2_sendInvAckToGetXRequestor;
+
+    // secondary is in SS, so send inv (state 2: secondary is upgrading)
+    fwmresp2_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // secondary SS(tag, data dir) accessed (event is on 2 since SS is on 2)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, primary (SS) is staying
+    aaststs1_allocateSingularTagBoth_primary;
+    dmt_insert_fromCache1;
+
+    l2a2_allocateL2;
+
+    // 2 naturally transits, 1 needs to be set (event is on 2 since SS is on 2)
+    l2set1_ss; 
+    set_secondary_as_cache_entry;
+
+    // unxoring, primary (SS) is staying
+    ooo_run_xor1;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  
+  /////////////////////////////////// L2ONLY_SS ///////////////////////////////////
+  transition(L2ONLY_SS, L1_GETX_other, L2ONLY_SS_unxorwbdata1) {
+    // primary L2ONLY->MT
+    // secondary SS
+    // secondary data is staying
+
+    // primary gets GETX (event is on 1)
+    i_allocateTBE;
+    xx_recordGetXL1ID;
+    
+    // L2ONLY->MT is on primary, should allocate dir
+    aadir_allocateDir;
+
+    // secondary is the one should send out UNXORWB (state SS is on 2)
+    sendUnxorwbreq_2other;
+
+    // secondary is staying (event is on 1)
+    expand_data1; // overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    // primary L2ONLY (tag, data) is accessed (event is on 1)
+    set_tagMRU;
+
+    uu_profileHit; // TOFIX: is this hit?
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS_unxorwbdata1, UNXORWB_Data2, SS) {
+    // primary L2ONLY->MT
+    // secondary SS
+    // secondary data is staying 
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // primary send data (state 1: primary is upgrading)
+    // send processed data (secondary comes back and need xor to get primary)
+    eeap1_sendProcessedDataToGetXRequestor_withackct;
+
+    // write data (secondary data comes back and is staying)
+    mresp_writeDataToCache_fromresp;
+
+    // secondary is staying
+    update_data2;
+
+    // entropy calculation: secondary is staying
+    entropy_reg_secondary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate primary(L2ONLY) tag and data (state 1: primary is upgrading)
+    ddt1_deallocateTag;
+    ddtns1_deallocateTagNS;
+
+    // fwmresp_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // secondary SS(tag, data dir) accessed (event is on 2 since SS is on 2)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, secondary (SS) is staying
+    aaststs2_allocateSingularTagBoth_secondary;
+    dmt_insert_fromCache2;
+    l2a2_allocateL2;
+
+    // 2 naturally transits, 1 needs to be set (event is on 2 since SS is on 2)
+    l2set1_mb; 
+    set_secondary_as_cache_entry;
+
+    // unxoring, secondary (SS) is staying
+    ooo_run_xor2;
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  
+  transition(L2ONLY_SS, L1_GETX2_self, L2ONLY_SS_unxorwbdata2) {
+    // primary L2ONLY
+    // secondary SS->MT
+    // primary data is staying
+
+    // secondary gets GETX (event is on 2)
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    xx2_recordGetXL1ID;
+
+    // SS->MT is on secondary, should allocate dir
+    // aadir_allocateDir;
+
+    // secondary is the one should send out UNXORWB (state SS is on 2)
+    sendUnxorwbreq_2self;
+
+    // primary is staying (event is on 2)
+    expand_data1; // overprovision
+
+    // secondary SS (tag, data) is accessed (event is on 2)
+    set_tagMRU;
+
+    uu_profileHit; // TOFIX: is this hit?
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS_unxorwbdata2, UNXORWB_Data2, SS_OR_MT_MB) {
+    // primary L2ONLY
+    // secondary SS->MT
+    // primary data is staying 
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (secondary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp; // secondary dirty dont care
+
+    // primary is staying
+    update_data1;
+
+    // entropy calculation: primary is staying
+    entropy_reg_primary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate secondary(SS) tag and data (state 2: secondary is upgrading)
+    ddt2_deallocateTag;
+
+    // secondary send data (state 2: secondary is upgrading)
+    // send raw data (secondary comes back and no need to xor)
+    eea2_sendIncomingDataToGetXRequestor_withackct;
+
+    // secondary is in SS, so send inv (state 2: secondary is upgrading)
+    fwmresp2_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // secondary SS(tag, data dir) accessed (event is on 2 since SS is on 2)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, primary (L2ONLY) is staying
+    aast1_allocateSingularTag_primary;
+    aadns1_allocateDataNS;
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+
+    l2a2_allocateL2;
+
+    // 2 naturally transits, 1 needs to be set (event is on 2 since SS is on 2)
+    l2set1_l2only; 
+    set_secondary_as_cache_entry;
+
+    // unxoring, primary (L2ONLY) is staying
+    ooo_run_xor1;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  transition(L2ONLY_SS, L1_UPGRADE2_self, L2ONLY_SS_unxorwbdata2_ug) {
+    // primary L2ONLY
+    // secondary SS->MT
+    // primary data is staying
+
+    // secondary gets GETX (event is on 2)
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    xx2_recordGetXL1ID;
+
+    // SS->MT is on secondary, should allocate dir
+    // aadir_allocateDir;
+
+    // secondary is the one should send out UNXORWB (state SS is on 2)
+    sendUnxorwbreq_2self;
+
+    // primary is staying (event is on 2)
+    expand_data1; // overprovision
+
+    // secondary SS (tag, data) is accessed (event is on 2)
+    set_tagMRU;
+
+    uu_profileMissCoh; 
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS_unxorwbdata2_ug, UNXORWB_Data2, SS_OR_MT_MB) {
+    // primary L2ONLY
+    // secondary SS->MT
+    // primary data is staying 
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (secondary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp; // secondary dirty dont care
+
+    // primary is staying
+    update_data1;
+
+    // entropy calculation: primary is staying
+    entropy_reg_primary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate secondary(SS) tag and data (state 2: secondary is upgrading)
+    ddt2_deallocateTag;
+
+    // secondary send ack only since this is upgrade (state 2: secondary is upgrading)
+    tx2_sendInvAckToGetXRequestor;
+
+    // secondary is in SS, so send inv (state 2: secondary is upgrading)
+    fwmresp2_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // secondary SS(tag, data dir) accessed (event is on 2 since SS is on 2)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, primary (L2ONLY) is staying
+    aast1_allocateSingularTag_primary;
+    aadns1_allocateDataNS;
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+
+    l2a2_allocateL2;
+
+    // 2 naturally transits, 1 needs to be set (event is on 2 since SS is on 2)
+    l2set1_l2only; 
+    set_secondary_as_cache_entry;
+
+    // unxoring, primary (L2ONLY) is staying
+    ooo_run_xor1;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  
+  /////////////////////////////////// SS_L2ONLY ///////////////////////////////////
+  transition(SS_L2ONLY, L1_GETX_self, SS_L2ONLY_unxorwbdata1) {
+    // primary SS->MT
+    // secondary L2ONLY
+    // secondary data is staying
+
+    // primary gets GETX (event is on 1)
+    i_allocateTBE;
+    xx_recordGetXL1ID;
+
+    // primary is the one should send out UNXORWB (state SS is on 1)
+    sendUnxorwbreq_1self;
+
+    // secondary is staying (event is on 1)
+    expand_data1; // overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    // primary SS (tag, data, dir) is accessed (event is on 1)
+    set_dirMRU;
+
+    uu_profileHit; // TOFIX: is this hit?
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY_unxorwbdata1, UNXORWB_Data, SS_OR_MT_MB) {
+    // primary SS->MT
+    // secondary L2ONLY
+    // secondary data is staying
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (primary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp;  // primary dirty dont care
+
+    // secondary is staying
+    update_data2;
+
+    // entropy calculation: secondary is staying
+    entropy_reg_secondary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate SS tag and data (state 1: primary is upgrading)
+    ddt_deallocateTag;
+
+    // primary send data (state 1: primary is upgrading)
+    // send raw data (primary comes back and no need to xor)
+    eea1_sendIncomingDataToGetXRequestor_withackct;
+
+    // primary send inv (primary is in SS) (state 1: primary is upgrading)
+    fwmresp_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // primary SS(tag, data dir) accessed (event is on 1 since SS is on 1)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, secondary (L2ONLY) is staying
+    aast2_allocateSingularTag_secondary;
+    aadns2_allocateDataNS;
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+    l2a2_allocateL2;
+    l2set2_l2only;
+    set_primary_as_cache_entry;
+    ooo_run_xor2;
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  transition(SS_L2ONLY, L1_UPGRADE_self, SS_L2ONLY_unxorwbdata1_ug) {
+    // primary SS->MT
+    // secondary L2ONLY
+    // secondary data is staying
+
+    // primary gets GETX (event is on 1)
+    i_allocateTBE;
+    xx_recordGetXL1ID;
+
+    // primary is the one should send out UNXORWB (state SS is on 1)
+    sendUnxorwbreq_1self;
+
+    // secondary is staying (event is on 1)
+    expand_data1; // overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    // primary SS (tag, data, dir) is accessed (event is on 1)
+    set_dirMRU;
+
+    uu_profileMissCoh; 
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY_unxorwbdata1_ug, UNXORWB_Data, SS_OR_MT_MB) {
+    // primary SS->MT
+    // secondary L2ONLY
+    // secondary data is staying
+
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // write data (primary data comes back and is not staying)
+    mpresp_processWriteDataToCache_fromresp;  // primary dirty dont care
+
+    // secondary is staying
+    update_data2;
+
+    // entropy calculation: secondary is staying
+    entropy_reg_secondary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate SS tag and data (state 1: primary is upgrading)
+    ddt_deallocateTag;
+
+    // primary send ack only since this is upgrade (state 1: primary is upgrading)
+    tx1_sendInvAckToGetXRequestor;
+
+    // primary send inv (primary is in SS) (state 1: primary is upgrading)
+    fwmresp_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // primary SS(tag, data dir) accessed (event is on 1 since SS is on 1)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    // unxoring, secondary (L2ONLY) is staying
+    aast2_allocateSingularTag_secondary;
+    aadns2_allocateDataNS;
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+    l2a2_allocateL2;
+    l2set2_l2only;
+    set_primary_as_cache_entry;
+    ooo_run_xor2;
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  
+  transition(SS_L2ONLY, L1_GETX2_other, SS_L2ONLY_unxorwbdata2) {
+    // primary SS
+    // secondary L2ONLY->MT
+    // primary data is staying
+
+    // secondary gets GETX (event is on 2)
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    xx2_recordGetXL1ID;
+
+    // L2ONLY->MT is on secondary, should allocate dir
+    aadir_allocateDir;
+
+    // primary is the one should send out UNXORWB (state SS is on 1)
+    sendUnxorwbreq_1other;
+
+    // primary is staying (event is on 1)
+    expand_data1; // overprovision
+
+    // secondary L2ONLY (tag, data) is accessed (event is on 2)
+    set_tagMRU;
+
+    uu_profileHit; // TOFIX: is this hit?
+    jj_popL1RequestQueue;
+    uur_profileDirRead;
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY_unxorwbdata2, UNXORWB_Data, SS) {
+    // primary SS
+    // secondary L2ONLY->MT
+    // primary data is staying
+    
+    // entropy calculation: remove xor data since we are unxoring
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+
+    // secondary send data (state 2: secondary is upgrading)
+    // send processed data (primary comes back and need xor to get secondary)
+    eeap2_sendProcessedDataToGetXRequestor_withackct;
+
+    // write data (primary data comes back and is staying)
+    mresp_writeDataToCache_fromresp;
+
+    // primary is staying
+    update_data1;
+
+    // entropy calculation: primary is staying
+    entropy_reg_primary_data;
+
+    // entropy calculation: remove both secondary and primary data since we are unxoring
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    // deallocate L2ONLY tag and data (state 2: secondary is upgrading)
+    ddt2_deallocateTag;
+    ddtns2_deallocateTagNS;
+
+    
+
+    // fwmresp2_sendFwdInvToSharersMinusRequestor_fromresp;
+
+    // primary SS(tag, data dir) accessed (event is on 1 since SS is on 1)
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+
+    // unxoring, primary (SS) is staying
+    aaststs1_allocateSingularTagBoth_primary;
+    dmt_insert_fromCache1;
+    l2a2_allocateL2;
+    l2set2_mb;
+    set_primary_as_cache_entry;
+    ooo_run_xor1;
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  
+
+  // GET stalls
+  transition({
+    L2ONLY_MTSB,MTSB_SS,SS_MTSB,MTSB_MTSB,MTSB_L2ONLY,
+    SI_L2ONLY_dd, SI_L2ONLY_dc, SI_SI_dd, SI_MI_dd, SI_MI_dc, SI_II_dc,
+    II_L2ONLY_cd, II_SI_cd, L2ONLY_SI_dd, L2ONLY_II_dc, II_MI_cd,
+    L2ONLY_SS_s, SS_L2ONLY_s, SSMB_SS_s, SS_SSMB_s, L2ONLY_SSMB_s, SSMB_L2ONLY_s,
+    SS_L2ONLY_r2, SI_SS_r1, SS_SI_r2,SI_L2ONLY_r1,L2ONLY_SI_r2,L2ONLY_SS_r1,
+    SS_SS_UB1, SS_SS_UB2, 
+    L2ONLY_SS_UB1, L2ONLY_SS_UB2, SS_L2ONLY_UB1, SS_L2ONLY_UB2,
+    MTSB_SS_UB2}, 
+    {L1_GETX2_self, L1_GETX_other, L1_GETX_self, L1_GETX2_other,
+      L1_GETX_stall, L1_GETX2_stall,
+      L1_UPGRADE_self, L1_UPGRADE2_self}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  transition({SS_SS_unxorwbdata1, SS_SS_unxorwbdata2, SS_SS_unxorwbdata1_ug, SS_SS_unxorwbdata2_ug,
+    L2ONLY_SS_unxorwbdata1, L2ONLY_SS_unxorwbdata2, L2ONLY_SS_unxorwbdata2_ug,
+    SS_L2ONLY_unxorwbdata1, SS_L2ONLY_unxorwbdata2, SS_L2ONLY_unxorwbdata1_ug}, 
+    {L1_GETX_self, L1_GETX2_self, L1_GETX_other, L1_GETX2_other,
+      L1_UPGRADE_self, L1_UPGRADE2_self,
+      L1_GETS_recon, L1_GET_INSTR_recon, L1_GETS2_recon, L1_GET_INSTR2_recon,
+      L1_GETS_fwd, L1_GET_INSTR_fwd, L1_GETS2_fwd, L1_GET_INSTR2_fwd,
+      L1_GETS_pb, L1_GET_INSTR_pb, L1_GETS2_pb, L1_GET_INSTR2_pb,
+    }) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // PUT stalls
+  transition({SS_SS_unxorwbdata1, SS_SS_unxorwbdata2, SS_SS_unxorwbdata1_ug, SS_SS_unxorwbdata2_ug,
+    L2ONLY_SS_unxorwbdata1, L2ONLY_SS_unxorwbdata2, L2ONLY_SS_unxorwbdata2_ug,
+    SS_L2ONLY_unxorwbdata1, SS_L2ONLY_unxorwbdata2, SS_L2ONLY_unxorwbdata1_ug}, 
+    {L1_PUTS_last2, L1_PUTS_last,
+      L1_PUTS_not_last2, L1_PUTS_not_last,
+      L1_PUTS_old, L1_PUTS_old2,
+      L1_PUTX_not_last, L1_PUTX_not_last2,
+      L1_PUTX, L1_PUTX2,
+      L1_PUTX_old
+    }) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // replacement stalls
+  transition({SS_SS_unxorwbdata1, SS_SS_unxorwbdata2, SS_SS_unxorwbdata1_ug, SS_SS_unxorwbdata2_ug,
+    L2ONLY_SS_unxorwbdata1, L2ONLY_SS_unxorwbdata2, L2ONLY_SS_unxorwbdata2_ug,
+    SS_L2ONLY_unxorwbdata1, SS_L2ONLY_unxorwbdata2, SS_L2ONLY_unxorwbdata1_ug}, 
+    {L2_Replacement_clean, L2_Replacement_clean2, L2_Replacement, L2_Replacement2,
+    L2_Replacement_data_dirty_dirty, L2_Replacement_data_clean_dirty, 
+    L2_Replacement_data_clean_clean, L2_Replacement_data_dirty_clean}) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+
+  // other stalls
+  transition({SS_SS_unxorwbdata1, SS_SS_unxorwbdata2, SS_SS_unxorwbdata1_ug, SS_SS_unxorwbdata2_ug,
+    L2ONLY_SS_unxorwbdata1, L2ONLY_SS_unxorwbdata2, L2ONLY_SS_unxorwbdata2_ug,
+    SS_L2ONLY_unxorwbdata1, SS_L2ONLY_unxorwbdata2, SS_L2ONLY_unxorwbdata1_ug}, Skip_XOR) 
+  {
+    cj_clearStallCount;
+    jf_popTriggerQueue_fail;
+  }

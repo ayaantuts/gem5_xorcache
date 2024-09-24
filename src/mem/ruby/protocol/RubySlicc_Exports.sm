@@ -286,9 +286,12 @@ enumeration(MessageSizeType, desc="...") {
   Request_Control_Data, desc="Request with Data";
   Reissue_Control, desc="Reissued request";
   Response_Data, desc="data response";
+  Response_Data_DualAddr, desc="data response with dual address (special to xor cache)";
   ResponseL2hit_Data, desc="data response";
   ResponseLocal_Data, desc="data response";
   Response_Control, desc="non-data response";
+  Extra_Unblock_Control, desc="unblock (extra for baseline but necessary for xorcache)";
+  Necessary_Unblock_Control, desc="unblock";
   Writeback_Data, desc="Writeback data";
   Writeback_Control, desc="Writeback control";
   Broadcast_Control, desc="Broadcast control";
@@ -399,12 +402,17 @@ enumeration(LinkDirection, desc="...") {
 
 // L2 hit path, used as hint to L1 cache for collecting statistics
 enumeration(L2HitMissPath, desc="L2 hit/miss path, used as hint to L1 cache for collecting statistics") {
-  DIRECT, desc="l2 directly supplies data to l1";
-  COHERENCE, desc="l2 dir asks for write permission and then promote block to M";
-  PB, desc="l2 piggybacks data to l1";
-  FWDA, desc="l2 forwards request to a sharer that has the block";
-  FWDB, desc="l2 forwards request to a sharer that has the paired block";
-  FWDE, desc="l2 forwards request to the exclusive owner of the block";
-  MISS, desc="l2 misses, lower level supplies data";
+  DIRECT, desc="l2 hit: l2 directly supplies data to l1";
+  L1DIRECT, desc="l2 hit: l2 directly supplies data to l1";
+  L2DIRECT, desc="l2 hit: l2 directly supplies data to l1";
+  DIRECTUNXOR, desc="l2 hit: l2 directly supplies data to l1";
+  L2DIRECTUNXOR, desc="l2 hit: l2 directly supplies data to l1";
+  FWDE, desc="l2 hit: l2 forwards request to an exclusive owner that has the block";
+  PB, desc="l2 hit: l2 piggybacks data to l1"; // (xor special) LOCAL RECOVERY IN FIG 6
+  FWDA, desc="l2 hit: l2 forwards request to a sharer that has the block"; // (xor special) DIRECT FORWARDING IN FIG 6
+  FWDB, desc="l2 hit: l2 forwards request to a sharer that has the paired block"; // (xor special) REMOTE RECOVERY IN FIG 6
+  MISS, desc="l2 misses: lower level (memory) supplies data"; // regular miss
+  L1COHERENCE, desc="technically not a access"; // l1 coherenece miss
+  L1COHERENCEUNXOR, desc="technically not a access"; // l1 coherenece miss
   NONE, desc="not specified";
 }

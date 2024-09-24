@@ -17,6 +17,12 @@ parser.add_argument(
     nargs='+',
 )
 parser.add_argument(
+    "--dfile",
+    type=str,
+    required=False,
+    help="debug file",
+)
+parser.add_argument(
     "--protocol",
     type=str,
     help="which protocol to run",
@@ -75,7 +81,8 @@ args = parser.parse_args()
 
 
 if args.protocol == "baseline":
-    design = "test"
+    design = ""
+    design_out = "test"
 elif args.protocol == "noisy":
     design = "MyMESI2"
     design_out = "MyMESI2_Noisy"
@@ -115,7 +122,9 @@ isExist = os.path.exists(path)
 if not isExist:
    os.makedirs(path)
 
-if not os.path.isfile(f"build/X86_{design}/gem5.opt"): 
+if design == "": binary = "X86"
+else: binary = f"X86_{design}"
+if not os.path.isfile(f"build/{binary}/gem5.opt"): 
     print(f"gem5 binary file not exist!")
     exit(1)
 
@@ -128,8 +137,10 @@ debug_flag = ""
 if args.flags:
     debug_flag = "--debug-flags="
     debug_flag += ",".join(args.flags)
+    if args.dfile:
+        debug_flag += f" --debug-file={args.dfile}"
 
-cmd_list = [f"nohup time build/X86_{design}/gem5.opt -d {path} " + \
+cmd_list = [f"nohup time build/{binary}/gem5.opt -d {path} " + \
 f"{debug_flag} {debug_interval} configs/my_configs/fs/ruby/custombinary/custombinary.py"
     ]
 cmd_list[0] += f" --image /home/zhewen/repo/gem5-resources/src/custom_binary/disk-image/custom_binary/custom_binary-image/custom_binary"

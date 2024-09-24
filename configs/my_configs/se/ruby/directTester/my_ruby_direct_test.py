@@ -55,8 +55,13 @@ parser.add_argument(
     choices=["baseline", "noisy", "decoupled", "compress", "dedup", "bdixor",
              "msi", "msi_nine", "msi_exc",
              "msi_nine_xor", "msi_nine_noxor", 
+
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
+
+             "msi_nine_xor_bdi_map3", "msi_nine_noxor_bdi_map3",
+             "msi_nine_xor_nobdi_map3", "msi_nine_noxor_nobdi_map3",
+
              "msi_nine_noxor_thesaurus_map",
              ],
     required=True,
@@ -123,6 +128,7 @@ elif args.protocol == "msi_exc":
 elif args.protocol == "msi_nine_xor":
     from test_caches_msi_nine_xor import TestCacheSystem_msi_nine_xor as TestCacheSystem_msi_nine_xor
     system.caches = TestCacheSystem_msi_nine_xor()
+
 elif args.protocol == "msi_nine_noxor_nobdi_map":
     from test_caches_msi_nine_xor_map import TestCacheSystem_msi_nine_xor_map as TestCacheSystem_msi_nine_xor_map
     system.caches = TestCacheSystem_msi_nine_xor_map(
@@ -149,6 +155,34 @@ elif args.protocol == "msi_nine_xor_nobdi_map":
         half_data=False,
         valid_candidate_ct_threshold=0,
     )
+
+elif args.protocol == "msi_nine_noxor_nobdi_map3":
+    from test_caches_msi_nine_3_xor_map import TestCacheSystem_msi_nine_3_xor_map as TestCacheSystem_msi_nine_xor_map
+    system.caches = TestCacheSystem_msi_nine_xor_map(
+        half_data=False,
+        valid_candidate_ct_threshold=10000000,
+    )
+elif args.protocol == "msi_nine_xor_bdi_map3":
+    from test_caches_msi_nine_3_xor_map import TestCacheSystem_msi_nine_3_xor_map as TestCacheSystem_msi_nine_xor_map
+    system.caches = TestCacheSystem_msi_nine_xor_map(
+        l3_compression="bdi",
+        half_data=True,
+        valid_candidate_ct_threshold=0,
+    )
+elif args.protocol == "msi_nine_noxor_bdi_map3":
+    from test_caches_msi_nine_3_xor_map import TestCacheSystem_msi_nine_3_xor_map as TestCacheSystem_msi_nine_xor_map
+    system.caches = TestCacheSystem_msi_nine_xor_map(
+        l3_compression="bdi",
+        half_data=True,
+        valid_candidate_ct_threshold=10000000,
+    )
+elif args.protocol == "msi_nine_xor_nobdi_map3":
+    from test_caches_msi_nine_3_xor_map import TestCacheSystem_msi_nine_3_xor_map as TestCacheSystem_msi_nine_xor_map
+    system.caches = TestCacheSystem_msi_nine_xor_map(
+        half_data=False,
+        valid_candidate_ct_threshold=0,
+    )
+
 elif args.protocol == "msi_nine_noxor_thesaurus_map":
     from test_caches_msi_nine_xor_map_thesaurus import TestCacheSystem_msi_nine_xor_map_thesaurus as TestCacheSystem_msi_nine_xor_map_thesaurus
     system.caches = TestCacheSystem_msi_nine_xor_map_thesaurus(

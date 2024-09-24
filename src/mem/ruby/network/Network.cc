@@ -64,6 +64,8 @@ Network::Network(const Params &p)
     fatal_if(p.data_msg_size > p.ruby_system->getBlockSizeBytes(),
              "%s: data message size > cache line size", name());
     m_data_msg_size = p.data_msg_size + m_control_msg_size;
+    std::cout << "data packet size: "<<m_data_msg_size << 
+    ", control packet size: " << m_control_msg_size << std::endl;
 
     params().ruby_system->registerNetwork(this);
 
@@ -168,6 +170,8 @@ Network::MessageSizeType_to_int(MessageSizeType size_type)
       case MessageSizeType_Request_Control:
       case MessageSizeType_Reissue_Control:
       case MessageSizeType_Response_Control:
+      case MessageSizeType_Necessary_Unblock_Control:
+      case MessageSizeType_Extra_Unblock_Control:
       case MessageSizeType_Writeback_Control:
       case MessageSizeType_Broadcast_Control:
       case MessageSizeType_Multicast_Control:
@@ -176,6 +180,9 @@ Network::MessageSizeType_to_int(MessageSizeType size_type)
       case MessageSizeType_Unblock_Control:
       case MessageSizeType_Persistent_Control:
       case MessageSizeType_Completion_Control:
+
+      
+
         return m_control_msg_size;
       case MessageSizeType_Data:
       case MessageSizeType_Request_Control_Data:
@@ -184,6 +191,8 @@ Network::MessageSizeType_to_int(MessageSizeType size_type)
       case MessageSizeType_ResponseL2hit_Data:
       case MessageSizeType_Writeback_Data:
         return m_data_msg_size;
+      case MessageSizeType_Response_Data_DualAddr:
+        return m_data_msg_size + m_control_msg_size;
       default:
         panic("Invalid range for type MessageSizeType");
         break;

@@ -9,9 +9,10 @@
 # LEVEL=$2
 
 declare -a bench=(
-    "MGS"
-    "MGSM"
-    "MGSL"
+    "int_vector_avg"
+    # "MGS"
+    # "MGSM"
+    # "MGSL"
     # "ws450kb"
     # "ws512kb"
     # "ws1024kb"
@@ -19,11 +20,12 @@ declare -a bench=(
 )
 
 core=(
-    16
+    # 16
+    1
 )
 
 declare -a protocol=(
-    # "baseline" 
+    "baseline" 
     # "noisy" 
     # "decoupled" 
     # "compress" 
@@ -34,7 +36,7 @@ declare -a protocol=(
 
     # "msi_nine_xor_bdi_map"
     # "msi_nine_noxor_bdi_map"
-    "msi_nine_xor_nobdi_map"
+    # "msi_nine_xor_nobdi_map"
     # "msi_nine_noxor_nobdi_map"
 )
 
@@ -45,11 +47,16 @@ declare -a protocol=(
 #     512
 # )
 
-# line_entropy=""
-line_entropy="--record_line_level_entropy"
+line_entropy=""
+# line_entropy="--record_line_level_entropy"
 
 debug=""
 # debug="--flags ProtocolTrace,RubyGenerated,RubyDataChange,RubyEntropyProfiler"
+################################## approxilyzer trace gen ##################################
+# debug="--flags ExecEnable,ExecUser,ExecEffAddr,ExecMacro --dfile dump_micro.gz"
+debug="--flags MemoryAccess --dfile mem_dump.gz"
+
+################################## approxilyzer trace gen ##################################
 
 # for L2SIZE in ${l2[@]};do
     for CORE in ${core[@]};do
