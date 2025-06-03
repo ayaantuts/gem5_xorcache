@@ -1,0 +1,389 @@
+// %%%%%%%%%%%%%%%%%% continue in UB %%%%%%%%%%%%%%%%%%
+  // UB1
+//   transition(SS_SS_UB1, {L1_GETS_fwd, L1_GET_INSTR_fwd}) {
+//     ipu_incrementPendingUBs;
+//     bb1_recordBlockedSharer;
+//     bf1_forwardRequestToSharer;
+
+//     nn_addSharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+  
+//   transition(SS_L2ONLY_UB1, {L1_GETS_fwd, L1_GET_INSTR_fwd}) {
+//     ipu_incrementPendingUBs;
+//     bb1_recordBlockedSharer;
+//     bf1_forwardRequestToSharer;
+
+//     nn_addSharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+//   transition(SS_L2ONLY_UB1, {L1_GET_INSTR2_recon, L1_GETS2_recon}, SS_SS_UB1) {
+//     set_primary_as_tbe;
+//     ipu_incrementPendingUBs;
+//     bb1_recordBlockedSharer;
+//     srs1_sendReconstructSToSharer;
+//     nns_addSecondarySharer;
+//     ddtns2_deallocateTagNS;
+
+//     l2set1_ssssub1;
+//     l2set2_ssssub1;
+
+//     aadir_allocateDir;
+
+//     set_tagMRU;
+//     set_dataMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDataRead;
+//     uur_profileDirRead;
+//   }
+
+//   // UB2
+//   transition(SS_SS_UB2, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+//     ipu_incrementPendingUBs;
+//     bb2_recordBlockedSharer;
+//     bf2_forwardRequestToSharer;
+
+//     nns_addSecondarySharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+//   transition(SS_SS_UB2, {L1_GETS_recon, L1_GET_INSTR_recon}) {
+//     set_secondary_as_tbe;
+//     ipu_incrementPendingUBs;
+//     bb2_recordBlockedSharer;
+//     srs2_sendReconstructSToSharer2;
+//     nn_addSharer;
+    
+//     aadir_allocateDir;
+
+//     set_tagMRU;
+//     set_dataMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDataRead;
+//     uur_profileDirRead;
+//   }
+  
+//   transition(L2ONLY_SS_UB2, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+//     ipu_incrementPendingUBs;
+//     bb2_recordBlockedSharer;
+//     bf2_forwardRequestToSharer;
+
+//     nns_addSecondarySharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+//   transition(L2ONLY_SS_UB2, {L1_GETS_recon, L1_GET_INSTR_recon}, SS_SS_UB2) {
+//     set_secondary_as_tbe;
+//     ipu_incrementPendingUBs;
+//     bb2_recordBlockedSharer;
+//     srs2_sendReconstructSToSharer2;
+//     nn_addSharer;
+//     ddtns_deallocateTagNS;
+
+//     l2set2_ssssub2;
+//     l2set1_ssssub2;
+    
+//     aadir_allocateDir;
+
+//     set_tagMRU;
+//     set_dataMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDataRead;
+//     uur_profileDirRead;
+//   }
+
+
+//   // UB12
+//   transition(SS_SS_UB12, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}) {
+//     set_secondary_as_tbe;
+//     ipu_incrementPendingUBs;
+//     bb2_recordBlockedSharer;
+//     bf2_forwardRequestToSharer;
+
+//     nns_addSecondarySharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+//   transition(SS_SS_UB12, {L1_GETS_fwd, L1_GET_INSTR_fwd}) {
+//     set_primary_as_tbe;
+//     ipu_incrementPendingUBs;
+//     bb1_recordBlockedSharer;
+//     bf1_forwardRequestToSharer;
+
+//     nn_addSharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+
+
+// // %%%%%%%%%%%%%%%%%% cross in UB %%%%%%%%%%%%%%%%%%
+//   transition(SS_SS_UB1, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}, SS_SS_UB12) {
+//     i2_allocateTBE;
+//     set_secondary_as_tbe;
+//     ipu_incrementPendingUBs;
+//     bb2_recordBlockedSharer;
+//     bf2_forwardRequestToSharer;
+
+//     l2set1_ssssub12;
+
+//     nns_addSecondarySharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+//   transition(SS_SS_UB2, {L1_GETS_fwd, L1_GET_INSTR_fwd}, SS_SS_UB12) {
+//     i_allocateTBE;
+//     ipu_incrementPendingUBs;
+//     bb1_recordBlockedSharer;
+//     bf1_forwardRequestToSharer;
+
+//     l2set2_ssssub12;
+
+//     nn_addSharer;
+
+//     set_dirMRU;
+
+//     uu_profileHit;
+//     jj_popL1RequestQueue;
+
+//     uur_profileDirRead;
+//     uur_profileTagRead;
+//     uur_profileDirRead;
+//   }
+
+// %%%%%%%%%%%%%%%%%% back to duo-stable %%%%%%%%%%%%%%%%%%
+  // UB1
+  // transition(SS_SS_UB1, Unblock_not_all) {
+  //   br_removeBlockedSharer;
+  //   dpu_decrementPendingUBs;
+  //   k_popUnblockQueue;
+
+  //   uur_profileDirRead;
+  //   uur_profileTagRead;
+  // }
+  transition(SS_SS_UB1, Unblock, SS_SS) {
+    nnu_addSharerFromUnblock;
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  
+  // transition(SS_L2ONLY_UB1, Unblock_not_all) {
+  //   br_removeBlockedSharer;
+  //   dpu_decrementPendingUBs;
+  //   k_popUnblockQueue;
+
+  //   uur_profileDirRead;
+  //   uur_profileTagRead;
+  // }
+  transition(SS_L2ONLY_UB1, Unblock, SS_L2ONLY) {
+    nnu_addSharerFromUnblock;
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+
+  // UB2
+  transition(SS_SS_UB2, Unblock_not_all2) {
+    nnus_addSecondarySharerFromUnblock;
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  transition(SS_SS_UB2, Unblock2, SS_SS) {
+    nnus_addSecondarySharerFromUnblock;
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  
+  transition(L2ONLY_SS_UB2, Unblock_not_all2) {
+    nnus_addSecondarySharerFromUnblock;
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  transition(L2ONLY_SS_UB2, Unblock2, L2ONLY_SS) {
+    nnus_addSecondarySharerFromUnblock;
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+
+  transition(MTSB_SS_UB2, Unblock_not_all2) {
+    nnus_addSecondarySharerFromUnblock;
+    br_removeBlockedSharer;
+    dpu_decrementPendingUBs;
+    k_popUnblockQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  transition(MTSB_SS_UB2, Unblock2, MTSB_SS) {
+    nnus_addSecondarySharerFromUnblock;
+    s_deallocateTBE;
+    k_popUnblockQueue;
+    kd1_wakeUpDependents;
+    kd2_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+
+
+  // UB12
+  // transition(SS_SS_UB12, Unblock_not_all) {
+  //   br_removeBlockedSharer;
+  //   dpu_decrementPendingUBs;
+  //   k_popUnblockQueue;
+
+  //   uur_profileDirRead;
+  //   uur_profileTagRead;
+  // }
+  // transition(SS_SS_UB12, Unblock, SS_SS_UB2) {
+  //   s_deallocateTBE;
+  //   l2set2_ssssub2;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   kd2_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  //   uur_profileTagRead;
+  // }
+  // transition(SS_SS_UB12, Unblock_not_all2) {
+  //   br_removeBlockedSharer;
+  //   dpu_decrementPendingUBs;
+  //   k_popUnblockQueue;
+
+  //   uur_profileDirRead;
+  //   uur_profileTagRead;
+  // }
+  // transition(SS_SS_UB12, Unblock2, SS_SS_UB1) {
+  //   s_deallocateTBE;
+  //   l2set1_ssssub1;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   kd2_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  //   uur_profileTagRead;
+  // }
+
+
+// // %%%%%%%%%%%%%%%%%%%%%% outof XOR %%%%%%%%%%%%%%%%%%%%%% 
+// %%%%%%%%%%%%%%%%%%%%%% stalling %%%%%%%%%%%%%%%%%%%%%%
+  // puts blocked
+  // repl
+  transition({SS_SS_UB1, SS_L2ONLY_UB1, L2ONLY_SS_UB1, 
+    SS_SS_UB2, SS_L2ONLY_UB2, L2ONLY_SS_UB2, MTSB_SS_UB2}, 
+    {L2_Replacement, L2_Replacement_clean, 
+    L2_Replacement2, L2_Replacement_clean2, 
+    L2_Replacement_data_dirty_dirty, L2_Replacement_data_clean_clean,
+    L2_Replacement_data_clean_dirty, L2_Replacement_data_dirty_clean,
+    L1_PUTS_not_last, L1_PUTS_not_last2, L1_PUTS_last, L1_PUTS_last2,
+    L1_PUTS_old, L1_PUTS_old2,
+    L1_PUTS_blocked, L1_PUTS_blocked2,
+    L1_PUTX_not_last, L1_PUTX_not_last2, L1_PUTX_old,
+    L1_GETS_pb, L1_GET_INSTR_pb, L1_GETS2_pb, L1_GET_INSTR2_pb,
+    L1_GETS_fwd, L1_GET_INSTR_fwd, L1_GETS2_fwd, L1_GET_INSTR2_fwd,
+    L1_GETS_recon, L1_GET_INSTR_recon, L1_GETS2_recon, L1_GET_INSTR2_recon,
+    L1_GETS, L1_GET_INSTR,
+    L1_GETS_lifted, L1_GET_INSTR_lifted,
+    L1_GETS2_stall, L1_GET_INSTR2_stall,
+    }) {
+    zz_stallAndWaitL1RequestQueue;
+  }
+  transition({SS_SS_UB1, SS_L2ONLY_UB1, L2ONLY_SS_UB1, 
+    SS_SS_UB2, SS_L2ONLY_UB2, L2ONLY_SS_UB2, MTSB_SS_UB2}, 
+    {MEM_Inv, MEM_Inv2}) {
+    zn_recycleResponseNetwork;
+  }
+
+

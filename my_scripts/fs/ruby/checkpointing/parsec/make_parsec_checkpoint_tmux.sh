@@ -20,14 +20,15 @@ declare -a bench=(
     # "freqmine" 
     # "raytrace" 
     # "streamcluster" 
-    # "swaptions" 
-    "vips" 
+    "swaptions" 
+    # "vips" 
     # "x264"
 )
 
 core=(
     # 2 
-    4
+    # 4
+    8
     # 16
     # 64
 )

@@ -65,13 +65,7 @@ parser.add_argument(
     # action='store_true',
     help="use ooo core",
 )
-parser.add_argument(
-    "--anonymous_latency",
-    type=bool,
-    required=False,
-    default=False,
-    help="assign l2 latency regardless of size",
-)
+
 parser.add_argument(
     "--size",
     type=str,
@@ -114,47 +108,18 @@ parser.add_argument(
     required=False,
     help="path to the local x86-parsec disk image",
 )
+parser.add_argument(
+    "--cachecfg",
+    type=str,
+    required=False,
+    help="for 3 level cache, choose either skylake or worse",
+    choices=["skylake", "realistic"],
+    default="skylake",
+)
 args = parser.parse_args()
 
 
 specified_l2size = int(args.l2size.split('kB')[0])
-
-if args.anonymous_latency:
-    l2_data_lat_map = { #TODO
-        32: 10,
-        64: 10,
-        128: 10,
-        256: 10,
-        512: 10,
-        1024: 10,
-        2048: 10,
-    }
-    l2_tag_lat_map = { #TODO
-        32: 2,
-        64: 2,
-        128: 2,
-        256: 2,
-        512: 2,
-        1024: 2,
-        2048: 2,
-    }
-else:
-    l2_data_lat_map = { #TODO
-        64: 4,
-        128: 7,
-        256: 11,
-        512: 20,
-        1024: 40,
-        2048: 53,
-    }
-    l2_tag_lat_map = { #TODO
-        64: 2,
-        128: 2,
-        256: 2,
-        512: 4,
-        1024: 4,
-        2048: 4,
-    }
 
 interval_for_benchmark = {
     "blackscholes": 1800000000,
@@ -172,212 +137,43 @@ interval_for_benchmark = {
     "x264":10000000000,
 }
 # Setting up all the fixed system parameters here
-# Caches: MESI Two Level Cache Hierarchy
-if args.protocol == 'baseline':
+# Caches: MESI Three Level Cache Hierarchy
+if args.protocol == 'dump':
     requires(
         isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL,
+        coherence_protocol_required=CoherenceProtocol.MESI_THREE_LEVEL,
         kvm_required=True,
     )
-
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
-        MESITwoLevelCacheHierarchy,
-    )
-    cache_hierarchy = MESITwoLevelCacheHierarchy(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size,
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        l2_data_lat = l2_data_lat_map[specified_l2size],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-    )
-elif args.protocol == "dump":
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL,
-        kvm_required=True,
-    )
-
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
-        MESITwoLevelCacheHierarchy,
-    )
-    cache_hierarchy = MESITwoLevelCacheHierarchy(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size,
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        l2_data_lat = l2_data_lat_map[specified_l2size],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-    )
-elif args.protocol == 'msi':
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MSI_TWO_LEVEL,
-        kvm_required=True,
-    )
-
-    from gem5.components.cachehierarchies.ruby.msi_two_level_cache_hierarchy import (
-        MSITwoLevelCacheHierarchy,
-    )
-    cache_hierarchy = MSITwoLevelCacheHierarchy(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size,
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        l2_data_lat = l2_data_lat_map[specified_l2size],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-    )
-elif args.protocol == 'noisy': 
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_MY,
-        kvm_required=True,
-    )
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_my import (
-     MESITwoLevelCacheHierarchyMy,
-    )
-    cache_hierarchy = MESITwoLevelCacheHierarchyMy(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size,
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        l2_data_lat = l2_data_lat_map[specified_l2size],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-    )
-elif args.protocol == 'decoupled': 
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_DECOUPLED,
-        kvm_required=True,
-    )
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_decoupled import (
-     MESITwoLevelCacheHierarchyDecoupled,
-    )
-    cache_hierarchy = MESITwoLevelCacheHierarchyDecoupled(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size, # simulating a halved data cache!
-        l2_assoc=8, 
-        num_l2_banks=args.core,
-        l2_data_lat = l2_data_lat_map[specified_l2size/2],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-    )
-elif args.protocol == 'compress': 
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_COMPRESS,
-        kvm_required=True,
-    )
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_compress import (
-     MESITwoLevelCacheHierarchyCompress,
-    )
-    
-    cache_hierarchy = MESITwoLevelCacheHierarchyCompress(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size, # simulating a halved data cache!
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        num_seg_per_blk=64,
-        l2_data_lat = l2_data_lat_map[specified_l2size/2],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-    )
-elif args.protocol == 'dedup': 
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_DEDUP,
-        kvm_required=True,
-    )
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_dedup import (
-     MESITwoLevelCacheHierarchyDedup,
-    )
-    l2_dataset = specified_l2size * 1024 / 64 / 2
-    cache_hierarchy = MESITwoLevelCacheHierarchyDedup(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size, # simulating a halved data cache!
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        num_seg_per_blk=64,
-        l2_data_lat = l2_data_lat_map[specified_l2size/2],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-        l2_dataArraySet=l2_dataset,
-    )
-elif args.protocol == 'bdixor': 
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_BDI_XOR,
-        kvm_required=True,
-    )
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_bdixor import (
-     MESITwoLevelCacheHierarchyBDIXOR,
-    )
-    
-    cache_hierarchy = MESITwoLevelCacheHierarchyBDIXOR(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size, # simulating a halved data cache!
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        num_seg_per_blk=64,
-        l2_data_lat = l2_data_lat_map[specified_l2size/2],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-        do_proactive_eviction=True,
-        search_in_set=True,
-        xor_policy_id = 1,
-    )
-elif re.search("xor_(\d)(\d)(\d)",args.protocol): 
-    requires(
-        isa_required=ISA.X86,
-        coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL_BDI_XOR,
-        kvm_required=True,
-    )
-    from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy_bdixor import (
-     MESITwoLevelCacheHierarchyBDIXOR,
-    )
-    
-    parameters = re.search("xor_(\d)(\d)(\d)",args.protocol)
-    p_dpe = bool(int(parameters.group(1)))
-    p_sis = bool(int(parameters.group(2)))
-    p_xpi = int(int(parameters.group(3)))
-    
-    cache_hierarchy = MESITwoLevelCacheHierarchyBDIXOR(
-        l1d_size="32kB",
-        l1d_assoc=8,
-        l1i_size="64kB",
-        l1i_assoc=4,
-        l2_size=args.l2size, # simulating a halved data cache!
-        l2_assoc=8,
-        num_l2_banks=args.core,
-        num_seg_per_blk=1,
-        l2_data_lat = l2_data_lat_map[specified_l2size/2],
-        l2_tag_lat = l2_tag_lat_map[specified_l2size],
-        do_proactive_eviction=p_dpe,
-        search_in_set=p_sis,
-        xor_policy_id = p_xpi,
+    from gem5.components.cachehierarchies.ruby.mesi_three_level_cache_hierarchy import (
+        MESIThreeLevelCacheHierarchy,
     )
 
 
+    if args.cachecfg == "skylake":
+        cache_hierarchy = MESIThreeLevelCacheHierarchy(
+            l1d_size="32kB",
+            l1d_assoc=4,
+            l1i_size="32kB",
+            l1i_assoc=4,
+            l2_size="1024kB",
+            l2_assoc=16,
+            l3_size="1408kB",
+            l3_assoc=11,
+            num_l3_banks=args.core,
+        )
+    elif args.cachecfg == "realistic":
+        cache_hierarchy = MESIThreeLevelCacheHierarchy(
+            l1d_size="32kB",
+            l1d_assoc=4,
+            l1i_size="32kB",
+            l1i_assoc=4,
+            l2_size="256kB",
+            l2_assoc=8,
+            l3_size="1024kB",
+            l3_assoc=16,
+            num_l3_banks=args.core,
+        )
+else: assert False
 # Memory: Dual Channel DDR4 2400 DRAM device.
 # The X86 board only supports 3 GB of main memory.
 

@@ -3,7 +3,6 @@
 
 import sys
 import argparse, subprocess, os, re
-from tqdm import tqdm
 from scipy.stats import gmean
 parser = argparse.ArgumentParser(description="config.")
 parser.add_argument(
@@ -41,6 +40,7 @@ parser.add_argument(
              "msi_nine_xor_nobdi_map3", "msi_nine_noxor_nobdi_map3",
 
              "msi_nine_noxor_thesaurus_map",
+             "msi_exc3",
              ],
     required=True,
 )
@@ -101,6 +101,9 @@ elif args.protocol == "msi_nine":
     design_out = design
 elif args.protocol == "msi_exc":
     design = "MyMSI_EXC"
+    design_out = design
+elif args.protocol == "msi_exc3":
+    design = "MyMSI_EXC3"
     design_out = design
 elif args.protocol == "msi_nine_xor":
     design = "MyMSI_NINE_XOR"

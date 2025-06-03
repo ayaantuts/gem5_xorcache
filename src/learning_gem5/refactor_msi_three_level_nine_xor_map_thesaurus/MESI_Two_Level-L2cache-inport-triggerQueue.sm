@@ -1,0 +1,119 @@
+in_port(triggerQueue_in, TriggerMsg, triggerQueue, rank=3) {
+    if (triggerQueue_in.isReady(clockEdge())) {
+      peek(triggerQueue_in, TriggerMsg) {
+        Entry cache_entry := getCacheEntry(in_msg.addr);
+        TBE tbe := TBEs[in_msg.addr];
+        State cur_state := getState(tbe, cache_entry, in_msg.addr);
+        if (!is_valid(cache_entry) || is_in_or_moving_to_M_state(cur_state) || is_stalling_state(cur_state) ||
+          L2cache.isSecondaryAddr(in_msg.addr) || L2cache.hasSecondaryAddr(in_msg.addr) ||
+          cache_entry.stall_count >= stall_tokens) {
+          trigger(Event:Skip_XOR, in_msg.addr, cache_entry, tbe);
+        }
+
+        // trigger(Event:XOR, in_msg.addr, cache_entry, tbe)
+        // ============ check if block can be xored with something else begin ============
+        DPRINTF(RubySlicc, "<rerun xor algorithm> now try to find a candidate for addr 0x%llx\n", in_msg.addr);
+        
+
+        bool only_check_shared_candidate := true;
+        DPRINTF(RubySlicc, "<rerun xor algorithm> currently in state %s\n", cur_state);
+        if (cur_state == State:SS || cur_state == State:MT_SB) {
+          DPRINTF(RubySlicc, "<rerun xor algorithm> partner can xor with any candidate\n");
+          only_check_shared_candidate := false;
+        } else if (cur_state == State:L2ONLY) {
+          DPRINTF(RubySlicc, "<rerun xor algorithm> partner can xor with only shared candidates\n");
+          only_check_shared_candidate := true;
+        } else {
+          DPRINTF(RubySlicc, "state=%s\n", cur_state);
+          error("<rerun xor algorithm> currently in unexpected state\n");
+        }
+
+
+        // remove itself from dmt temporarily, this is to avoid returning itself as candidate
+        DPRINTF(RubySlicc, "<rerun xor algorithm> temporarily removing it from dmt\n");
+        remove_block_from_all_dmt_temp(cur_state, in_msg.addr);
+
+        
+        DataBlock datablk := getDataBlockLogical(in_msg.addr);
+
+        Addr candidate := in_msg.addr;
+        bool found_shared_candidate := false;
+        bool found_nonshared_candidate := false;
+
+        Entry xor_candidate_cache_entry := getCacheEntry(in_msg.addr);
+        TBE xor_candidate_tbe := TBEs[in_msg.addr];
+        State xor_candidate_state := getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate);
+
+        if (dmt.isXORPolicyBalanced() || dmt.isXORPolicyOppurtunistic()) {
+          if (dmt.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold() && dmt.hasAnyRegisteredCandidate()) {
+            if (dmt.hasRegisteredCandidate(datablk)) {
+              candidate := dmt.getRandomRegisteredCandidate(datablk);
+            } else {
+              candidate := dmt.getAnyRandomRegisteredCandidate();
+            }
+            xor_candidate_cache_entry := getCacheEntry(candidate);
+            xor_candidate_state := getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate);
+
+            if (only_check_shared_candidate) {
+              if (dmtShared.isCandidate(candidate)) {
+                found_shared_candidate := true;
+              }
+            } else {
+              if (dmtNShared.isCandidate(candidate)) {
+                found_nonshared_candidate := true;
+              } else {
+                found_shared_candidate := true;
+              }
+            }
+          }
+        } else if (dmt.isXORPolicySynergy()) {
+          if (dmt.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold() && dmt.hasAnyRegisteredCandidate()) {
+            if (dmt.hasRegisteredCandidate(datablk)) {
+              candidate := dmt.getRandomRegisteredCandidate(datablk);
+              xor_candidate_cache_entry := getCacheEntry(candidate);
+              xor_candidate_state := getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate);
+
+              if (only_check_shared_candidate) {
+                if (dmtShared.isCandidate(candidate)) {
+                  found_shared_candidate := true;
+                }
+              } else {
+                if (dmtNShared.isCandidate(candidate)) {
+                  found_nonshared_candidate := true;
+                } else {
+                  found_shared_candidate := true;
+                }
+              }
+            }
+          }
+        }
+        
+        // xor block with candidate
+        if (found_shared_candidate) {
+          dmtShared.remove(candidate);
+        }
+        if (found_nonshared_candidate) {
+          dmtNShared.remove(candidate);
+        }
+        if ((found_nonshared_candidate || found_shared_candidate)) {
+          // check data size
+          DataBlock newData := dataProc.peek_preproc(xor_candidate_cache_entry.DataBlk_phy, cache_entry.DataBlk_phy);
+          // int comp_data_size_in_byte := dataProc.peek_compress(newData);
+          int comp_data_size_in_byte := block_size_in_bytes;
+
+          if (data.cacheAvail(candidate, comp_data_size_in_byte)) {
+            dmt.remove(candidate);
+            L2cache.pair(candidate, in_msg.addr);
+            DPRINTF(RubySlicc, "<rerun xor algorithm> ok xor paired, primary=0x%llx, secondary=0x%llx\n",
+              candidate, in_msg.addr);
+            Event xor_arrival_state := find_xor_goto_event(getState(tbe, cache_entry, in_msg.addr), xor_candidate_state);
+            trigger(xor_arrival_state, in_msg.addr, xor_candidate_cache_entry, xor_candidate_tbe);
+          }
+        }
+        DPRINTF(RubySlicc, "<rerun xor algorithm> nice try, better luck next time\n");
+        // remember that we have temporarily removed this block from dmt, if we didnt find cand, we need to add it back
+        trigger(Event:Stall_XOR, in_msg.addr, cache_entry, tbe);
+        // ============ check if block can be xored with something else end ============
+      }
+    }
+  }

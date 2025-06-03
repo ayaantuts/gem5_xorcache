@@ -7,7 +7,7 @@ class Preproc(Enum):
     vals = ["no_preproc", "xor_preproc"]
 
 class Compress(Enum):
-    vals = ["no_compress", "bdi", "thesaurus"]
+    vals = ["no_compress", "bdi", "thesaurus", "bitplane"]
 
 class RubyDataProc(SimObject):
     type = "RubyDataProc"
@@ -26,6 +26,6 @@ class RubyDataProc(SimObject):
     CompressLatency = Param.Cycles(1, "cycles for compression")
     DecompressLatency = Param.Cycles(1, "cycles for decompression")
     segment_size_in_byte = Param.Int(8, "segment size in byte")
-    tagptr_size_in_bit = Param.Int(15, "tagptr size in bit")
+    tagptr_size_in_bit = Param.Int(0, "tagptr size in bit")
 
     ruby_system = Param.RubySystem(Parent.any, "")

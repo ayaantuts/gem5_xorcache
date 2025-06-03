@@ -52,6 +52,7 @@ parser.add_argument(
     choices=["baseline", "noisy", "decoupled", "compress", "dedup", "bdixor",
              "msi", "msi_nine", 
              "msi_exc_nobdi", "msi_exc_bdi",
+             "msi_exc3",
              "mesi2_nobdi", "mesi2_bdi",
              "msi_nine_xor", "msi_nine_noxor", 
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
@@ -105,6 +106,10 @@ elif args.protocol == "msi_exc_nobdi":
 elif args.protocol == "msi_exc_bdi":
     from test_caches_msi_exc import TestCacheSystem_msi_exc as TestCacheSystem_msi_exc
     system.caches = TestCacheSystem_msi_exc(l2_compression="bdi")
+
+elif args.protocol == "msi_exc3":
+    from test_caches_msi_exc3 import TestCacheSystem_msi_nine_exc3 as TestCacheSystem_msi_nine_exc3
+    system.caches = TestCacheSystem_msi_nine_exc3()
 
 elif args.protocol == "mesi2_nobdi":
     from test_caches_mesi2_intra import TestCacheSystem_mesi2_intracomp as TestCacheSystem_mesi2_intracomp

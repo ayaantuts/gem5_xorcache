@@ -4,13 +4,14 @@ then
     echo "specify the config set number"
     exit 1
 fi
+fast=""
+# fast="--fast 1"
 host=$(hostname)
 if [ "$host" = "zhewen-MS-7D25" ]; then
     home="--home 1"
 else
     home=""
 fi
-
 declare -a bench=(
     # "2d_convolution"
     # "dwt53"
@@ -19,6 +20,24 @@ declare -a bench=(
     # "debayer"
     # "lucas-kanade"
 )
+
+# tagptr=""
+# TAGPTR="TAGPTR"
+
+tagptr="--no-tagptr"
+TAGPTR="NOTAGPTR"
+
+llclat=""
+LLCLAT="_"
+
+# llclat="--llc_lat 1"
+# LLCLAT="_LLCLAT1"
+
+# llclat="--llc_lat 10"
+# LLCLAT="_LLCLAT10"
+
+# llclat="--llc_lat 100"
+# LLCLAT="_LLCLAT100"
 
 core=(
     # 1
@@ -30,20 +49,31 @@ set="omp"
 
 suite="all"
 
+comparison="isoperf"
+# comparison="isoarea"
+
 declare -a protocol=(
-    # "baseline"
     #  "msi_nine_xor_bdi_map"
     #  "msi_nine_noxor_bdi_map"
     #  "msi_nine_xor_nobdi_map"
     #  "msi_nine_noxor_nobdi_map"
 
-     "msi_nine_xor_bdi_map3"
+    #  "msi_nine_xor_bdi_map3"
+     "msi_nine_xor_thesaurus_map3"
+
     #  "msi_nine_noxor_bdi_map3"
+    #  "msi_nine_noxor_thesaurus_map3"
+
     #  "msi_nine_xor_nobdi_map3"
+
     #  "msi_nine_noxor_nobdi_map3"
+    #  "mesi3"
 
     # "msi_exc_nobdi"
     # "msi_exc_bdi"
+
+    # "msi_exc3"
+    # "msi_exc_bdi3"
 
     # "mesi2_inc_nobdi"
     # "mesi2_inc_bdi"
@@ -53,6 +83,7 @@ ratio=2.5
 # ratio=1.5
 # ratio=2
 # ratio=1
+# ratio=1.3
 ratio_str=${ratio/./_}
 
 # ooo="--ooo"
@@ -62,7 +93,8 @@ OOO=0
 
 L2_DATA_SEGEMENT_SIZE=8
 L2_TRANSITIONS_PER_CYCLE=1024
-L2_DATA_REGIONS=32
+L2_DATA_REGIONS=64
+
 INDEX_SHIFT_BITS=0
 
 case $1 in
@@ -157,7 +189,6 @@ case $1 in
     L2_NUM_MAPTABLE_SETS=4096
     L2_LIST_CAPACITY=1
     ;;
-  
   *) echo "ERROR: this option has not been configured"
     exit 1
   ;; 
@@ -173,27 +204,15 @@ line_entropy=""
 # line_entropy="--record_line_level_entropy"
 
 
-l2=(
-    # 32
-    # 64
-    # 128
-    # 256
-    # 512
-    # 1024
-    1408
-    # 2048
+cachecfg=(
+    # "skylake"
+    "realistic"
 )
 
 debug=""
-# debug="--flags RubyDataTransformation"
-# debug="--flags ProtocolTrace,RubySlicc,RubyGenerated"
-# debug="--flags ProtocolTrace"
-# debug="--begin 18208298911130 --end 18208299011131 --flags ProtocolTrace,RubySlicc,RubyGenerated"
-# debug="--flags RubyDataTransformation,RubyAssociativeMapTable,RubyDataCluster"
-
-# debug="--begin 19279464824070 --end 19279464834070 --flags ProtocolTrace,RubySlicc,RubyGenerated" # histogram_equalizations
-# debug="--flags ProtocolTrace,RubySlicc,RubyGenerated" # generic
-
+# debug="--flags RubyThesaurus"
+# debug="--flags RubySlicc,RubyGenerated"
+# debug="--flags RubySlicc,RubyGenerated --begin 19280132038853 --end 19280132048854"
 ################################## approxilyzer trace gen ##################################
 # debug="--flags ExecEnable,ExecUser,ExecEffAddr,ExecMacro --dfile dump_micro.gz"
 # debug="--flags MemoryAccess --dfile mem_dump.gz"
@@ -202,55 +221,60 @@ debug=""
 # DISASSEMBLE="--disassemble 1"
 ################################## approxilyzer trace gen ##################################
 
-for L2SIZE in ${l2[@]};do
+for CFG in ${cachecfg[@]};do
     for CORE in ${core[@]};do
         for PROT in "${protocol[@]}"
         do
             for BEN in "${bench[@]}"
             do
-                if [[ "$PROT" = "msi_nine_noxor_nobdi_map" || "$PROT" = "msi_nine_noxor_nobdi_map3" ]]; then
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+                if [[ "$PROT" = "mesi3" ]]; then
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
                     L2_DATA_REGIONS_USED=1
-                    L2_DATA_SEGEMENT_SIZE_USED=1
-                elif [[ "$PROT" = "msi_nine_noxor_bdi_map" || "$PROT" = "msi_nine_noxor_bdi_map3" ]]; then
+                    L2_DATA_SEGEMENT_SIZE_USED=64
+                elif [[ "$PROT" = "msi_nine_noxor_nobdi_map" || "$PROT" = "msi_nine_noxor_nobdi_map3" ]]; then
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+                    L2_DATA_REGIONS_USED=1
+                    L2_DATA_SEGEMENT_SIZE_USED=64
+                elif [[ "$PROT" = "msi_nine_noxor_bdi_map" || "$PROT" = "msi_nine_noxor_bdi_map3"  || "$PROT" = "msi_nine_noxor_thesaurus_map3" ]]; then
                     L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
                 elif [[ "$PROT" = "msi_nine_xor_nobdi_map" || "$PROT" = "msi_nine_xor_nobdi_map3" ]]; then
                     L2_DATA_REGIONS_USED=1
-                    L2_DATA_SEGEMENT_SIZE_USED=1
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}
-                elif [[ "$PROT" = "msi_nine_xor_bdi_map" || "$PROT" = "msi_nine_xor_bdi_map3" ]]; then
+                    L2_DATA_SEGEMENT_SIZE_USED=64
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}
+                elif [[ "$PROT" = "msi_nine_xor_bdi_map" || "$PROT" = "msi_nine_xor_bdi_map3" || "$PROT" = "msi_nine_xor_thesaurus_map3" ]]; then
                     L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}_${INDEX_SHIFT_BITS}shift
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region_${L2_MAP_BITS}mapb_${L2_NUM_MAPTABLE_SETS}x${L2_LIST_CAPACITY}_${folding}_${xor_policy}_${INDEX_SHIFT_BITS}shift
                 
-                elif [ "$PROT" = "msi_exc_nobdi" ]; then
+                elif [[ "$PROT" = "msi_exc_nobdi" || "$PROT" = "msi_exc3" ]]; then
                     L2_DATA_REGIONS_USED=1
-                    L2_DATA_SEGEMENT_SIZE_USED=1
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
-                elif [ "$PROT" = "msi_exc_bdi" ]; then
+                    L2_DATA_SEGEMENT_SIZE_USED=64
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+                elif [[ "$PROT" = "msi_exc_bdi" || "$PROT" = "msi_exc_bdi3" ]]; then
                     L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
                 
+                  elif [ "$PROT" = "msi_exc_bdi3" ]; then
+                      L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
+                      L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
+
                 elif [ "$PROT" = "mesi2_inc_nobdi" ]; then
                     L2_DATA_REGIONS_USED=1
-                    L2_DATA_SEGEMENT_SIZE_USED=1
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
+                    L2_DATA_SEGEMENT_SIZE_USED=64
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_${L2_TRANSITIONS_PER_CYCLE}t
                 elif [ "$PROT" = "mesi2_inc_bdi" ]; then
                     L2_DATA_REGIONS_USED=$L2_DATA_REGIONS
                     L2_DATA_SEGEMENT_SIZE_USED=$L2_DATA_SEGEMENT_SIZE
-                    session_name=restore_perfect_${SIZE}${CORE}${PROT}_${L2SIZE}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
-                
-                elif [ "$PROT" = "baseline" ]; then
-                    L2_DATA_REGIONS_USED=1
-                    L2_DATA_SEGEMENT_SIZE_USED=1
-                    session_name=restore_perfect_baseline
+                    session_name=restore_perfect_${comparison}_${SIZE}${CORE}${PROT}_${CFG}_O${OOO}_r${ratio_str}_${L2_TRANSITIONS_PER_CYCLE}t_seg${L2_DATA_SEGEMENT_SIZE_USED}_${L2_DATA_REGIONS_USED}region
                 else
                     echo "wrong protocol"
                     exit 1
                 fi
+
+                session_name=${session_name}${LLCLAT}_${TAGPTR}
 
                 tmux has-session -t $session_name 2>/dev/null
                 if [ $? != 0 ]; then
@@ -263,7 +287,6 @@ for L2SIZE in ${l2[@]};do
                     --core ${CORE} \
                     --set ${set} \
                     --protocol $PROT \
-                    --use_anonymous_latency 1 \
                     --l2factor $ratio \
                     --ckpt_search_path /home/$USER/Dropbox/result/coherence/m5out \
                     $ooo \
@@ -280,7 +303,11 @@ for L2SIZE in ${l2[@]};do
                     --suite_name $suite \
                     --index_bits_shift ${INDEX_SHIFT_BITS} \
                     $DISASSEMBLE \
-                    --l2size ${L2SIZE}kB $debug " C-m
+                    --cachecfg ${CFG} \
+                    --comparison $comparison \
+                    $fast \
+                    $llclat $tagptr \
+                    $debug " C-m
                 else
                     echo "$BEN"
                     tmux new-window -n $BEN -t $session_name:
@@ -289,7 +316,6 @@ for L2SIZE in ${l2[@]};do
                     --core ${CORE} \
                     --set ${set} \
                     --protocol $PROT \
-                    --use_anonymous_latency 1 \
                     --l2factor $ratio \
                     --ckpt_search_path /home/$USER/Dropbox/result/coherence/m5out \
                     $ooo \
@@ -306,7 +332,11 @@ for L2SIZE in ${l2[@]};do
                     --suite_name $suite \
                     --index_bits_shift ${INDEX_SHIFT_BITS} \
                     $DISASSEMBLE \
-                    --l2size ${L2SIZE}kB $debug" C-m
+                    --cachecfg ${CFG} \
+                    --comparison $comparison \
+                    $fast \
+                    $llclat $tagptr \
+                    $debug" C-m
                 fi
             done
         done

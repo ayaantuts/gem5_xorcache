@@ -34,6 +34,9 @@ DataProc::DataProc(const Params &p)
         m_decompress_latency = Cycles(0);
     } else {
         m_decompress_latency = p.DecompressLatency;
+        if (m_compress == enums::bitplane) {
+            m_decompress_latency = Cycles(7); //overriding the fixed 1 cycle latency // TODO: make this a parameter
+        }
     }
     std::cout << "Comp comp! From a DataProc! "<< p.preprocessing << "," << p.compress << "(decompress lat=" <<
         m_decompress_latency << ")" << std::endl;
@@ -55,6 +58,16 @@ DataProc::init()
 DataProc::~DataProc()
 {
 }
+// =========== Computing Thesaurus LSH fingerprint as address ===========
+Addr
+DataProc::compute_thesaurus_lsh_fingerprint(DataBlock blk, int fingerprint_bits, int m_block_size) const
+{
+    uint64_t fingerprint = blk.thesaurus_lsh(blk, fingerprint_bits, m_block_size);
+    Addr addr = fingerprint << floorLog2(m_block_size); // pad with 0s on the right (these will be ignored when computing line addr)
+    return addr;
+}
+
+
 // =========== Compression ===========
 
 
@@ -111,6 +124,166 @@ DataProc::peek_compress_intra_bdi(DataBlock blk)
     return comp_size;
 }
 
+int
+DataProc::peek_compress_intra_bitplane(DataBlock blk)
+{
+    // split the line data into 4 byte segments
+    int num_segs = m_block_size / 4;
+    u_int32_t * segs = new u_int32_t[num_segs];
+    memcpy(segs, blk.getDataMod(0), m_block_size);
+
+    // the first segment is the base for subtraction
+    int num_deltas = num_segs - 1;
+    u_int64_t * deltas = new u_int64_t[num_deltas];// each delta is actually 33 bit
+    memset(deltas, 0, num_deltas * sizeof(u_int64_t));
+    u_int32_t base = segs[0];
+    // make the rest of the segments the deltas
+    for (int i = 1; i < num_deltas; i++) {
+        u_int64_t d = ((u_int64_t)segs[i] - (u_int64_t)base);
+        deltas[i] = (u_int64_t) d;
+    }
+    delete [] segs;
+
+    // transpose the segments to be 33 u_int16_t (15 bit) DBP planes
+    int num_DBP = (m_block_size / 2)+1; // 33
+    u_int16_t * DBP = new u_int16_t[num_DBP];
+    memset(DBP, 0, num_DBP * sizeof(u_int16_t));
+    // for plane i, take ith bit from all deltas
+    for (int i=0; i < num_DBP; i++) {
+        for (int j=0; j < num_deltas; j++) {
+            DBP[i] = DBP[i] | (((deltas[j] >> i) & 1) << j);
+        }
+    }
+    delete [] deltas;
+
+    int num_DBX = num_DBP - 1;
+    u_int16_t * DBX = new u_int16_t[num_DBX];
+    // xor with neighboring DBP planes, the last plane is untouched
+    for (int i = 0; i < num_DBX; i++) {
+        DBX[i] = DBP[i] ^ DBP[i+1];
+    }
+
+    int num_bits_base = bitplane_base_orig_encoder(base);
+    int num_bits_planes = bitplane_bp_encoder(DBX, DBP, num_DBP);
+    int total_bytes = int(ceil(((double)num_bits_base + (double)num_bits_planes) / 8.0));
+    delete [] DBP;
+    delete [] DBX;
+
+    if (total_bytes > m_block_size) {
+        total_bytes = m_block_size;
+    }
+    return total_bytes;
+}
+
+// compress the 32 bit base
+int
+DataProc::bitplane_base_orig_encoder(u_int32_t base) {
+    int32_t base_signed = (int32_t) base;
+    if (base == 0) return 3;
+    if (base_signed <= 7 && base_signed >= -8) return 7;
+    if (base_signed <= 127 && base_signed >= -128) return 11;
+    if (base_signed <= 32767 && base_signed >= -32768) return 19;
+    return 33;
+}
+
+// compress the 15 bit planes alltogether (original paper uses 31-bit planes)
+int 
+DataProc::bitplane_bp_encoder(u_int16_t * DBX, u_int16_t * DBP, int num_DBP) {
+    int num_bits = 0;
+    int length_single_zero_plane = 3;
+    int length_single_multiple_plane = 7;
+
+    // first pass, compress all the zero planes
+    std::vector<int> idx_zero_planes = {};
+    for (int i = 0; i < num_DBP; i++) {
+        u_int16_t plane_under_test;
+        if (i == num_DBP - 1) {
+            plane_under_test = DBP[i];
+        } else {
+            plane_under_test = DBX[i];
+        }
+
+        if (plane_under_test == 0) {
+            // add this index
+            idx_zero_planes.push_back(i);
+        }
+    }
+    // figure out how many runs (consecutive index) are there
+    int prev_idx = -1;
+    std::vector<int> length_of_runs = {};
+    int cur_run_idx = -1;
+    for (unsigned i = 0; i < idx_zero_planes.size(); i++) {
+        int cur_idx = idx_zero_planes[i];
+        if (prev_idx == -1) {
+            // this is the first zero
+            cur_run_idx = 0; // first run
+            prev_idx = cur_idx;
+            length_of_runs.push_back(1);
+        } else if (prev_idx + 1 == cur_idx) {
+            // this is a consecutive zero
+            length_of_runs[cur_run_idx] += 1;
+            prev_idx = cur_idx;
+        } else {
+            // this is a new run
+            cur_run_idx += 1;
+            prev_idx = cur_idx;
+            length_of_runs.push_back(1);
+        }
+    }
+    int total_ct_zero = 0;
+    for (unsigned i = 0; i < length_of_runs.size(); i++) {
+        total_ct_zero += length_of_runs[i];
+        if (length_of_runs[i] == 1) {
+            num_bits += length_single_zero_plane;
+        } else {
+            num_bits += length_single_multiple_plane;
+        }
+    }
+    assert(total_ct_zero == (int)idx_zero_planes.size());
+
+    // second path, compress the non-zero planes
+    for (int i = 0; i < num_DBP; i++) {
+        u_int16_t plane_under_test;
+        if (i == num_DBP - 1) {
+            plane_under_test = DBP[i];
+        } else {
+            plane_under_test = DBX[i];
+        }
+
+        u_int8_t * plane_bytes = reinterpret_cast<u_int8_t*>(&plane_under_test);
+        int data_size = 2; // 2byte
+
+
+        if (plane_under_test == 0) continue; // already counted
+        else if (plane_under_test == 0x7f) num_bits+=5; // all 1
+        else if (DBP[i] == 0) num_bits+=5;
+        else if (plane_under_test == 0x3 || plane_under_test == 0x6 || plane_under_test == 0xc || plane_under_test == 0x18 || 
+            plane_under_test == 0x30 || plane_under_test == 0x60 || plane_under_test == 0xc0 || plane_under_test == 0x180 || 
+            plane_under_test == 0x300 || plane_under_test == 0x600 || plane_under_test == 0xc00 || plane_under_test == 0x1800 || 
+            plane_under_test == 0x3000 || plane_under_test == 0x6000) num_bits+=10;
+        else if (countSetBits(plane_bytes, data_size) == 1) num_bits += 10;
+        else num_bits += 16;
+    }
+    return num_bits;
+}
+
+unsigned
+DataProc::countSetBits(const u_int8_t* data, const int data_size) 
+{
+    unsigned count = 0;
+
+    for (int i = 0; i < data_size; i++) {
+        u_int8_t byte = data[i];
+        unsigned ct = 0;
+        while (byte != 0) {
+            ct += byte & 1;
+            byte = byte >> 1;
+        }
+        count += ct;
+    }
+
+    return count;
+}
 
 // returns the idealistic compressed size in byte, ignoring the actual segment size
 int
@@ -122,6 +295,8 @@ DataProc::peek_compress_intra(DataBlock blk)
 
     if (m_compress == enums::bdi) {
         comp_size = peek_compress_intra_bdi(blk);
+    } else if (m_compress == enums::bitplane) {
+        comp_size = peek_compress_intra_bitplane(blk);
     }
     else if (m_compress == enums::no_compress) {
         comp_size = m_block_size;
@@ -162,6 +337,10 @@ DataProc::peek_compress_inter(DataBlock blk, DataBlock ref)
         } else {
             comp_size = 8 + diff_byte;
         }
+
+        if (comp_size > m_block_size) {
+            return m_block_size;
+        }
     }
     else {
         panic("unknown compression type\n");
@@ -191,7 +370,7 @@ DataProc::compress(DataBlock blk) {
     if (m_compress == enums::no_compress) {
         return m_block_size;
     } else {
-        if (m_compress == enums::bdi) {
+        if (m_compress == enums::bdi || m_compress == enums::bitplane) {
             dataProcStats.numCompressionIntra++;
             int comp_size_bytes = DataProc::peek_compress_intra(blk);
             dataProcStats.compSizeinByte.sample(comp_size_bytes);
@@ -203,7 +382,7 @@ DataProc::compress(DataBlock blk) {
             int comp_size_bytes_real = num_seg * m_segment_size_in_byte;
             dataProcStats.compSizeinByteReal.sample(comp_size_bytes_real);
 
-            if (comp_size_bytes_real < m_block_size) {
+            if (comp_size_bytes < m_block_size) {
                 dataProcStats.numCompIntraSuccess++;
             }
             else {
@@ -234,7 +413,7 @@ DataProc::compress(DataBlock blk, DataBlock ref) {
             int comp_size_bytes_real = num_seg * m_segment_size_in_byte;
             dataProcStats.compSizeinByteReal.sample(comp_size_bytes_real);
 
-            if (comp_size_bytes_real < m_block_size) {
+            if (comp_size_bytes < m_block_size) {
                 dataProcStats.numCompInterSuccess++;
             }
             else {

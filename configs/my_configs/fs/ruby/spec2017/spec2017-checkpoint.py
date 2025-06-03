@@ -14,7 +14,7 @@
 """
 Script to run SPEC CPU2017 benchmarks with gem5.
 The script expects a benchmark program name and the simulation
-size. The system is flexible in number of CPU cores (default 1), MESI Two Level system
+size. The system is flexible in number of CPU cores (default 1), MESI Three Level system
 cache and 3 GB DDR4 memory. It uses the x86 board.
 
 This script will count the total number of instructions executed
@@ -62,7 +62,7 @@ from m5.util import fatal
 
 requires(
     isa_required=ISA.X86,
-    coherence_protocol_required=CoherenceProtocol.MESI_TWO_LEVEL,
+    coherence_protocol_required=CoherenceProtocol.MESI_THREE_LEVEL,
     kvm_required=True,
 )
 
@@ -251,7 +251,14 @@ parser.add_argument(
     help="num of processes.",
     default=1,
 )
-
+parser.add_argument(
+    "--cachecfg",
+    type=str,
+    required=False,
+    help="for 3 level cache, choose either skylake or worse",
+    choices=["skylake", "realistic"],
+    default="skylake",
+)
 
 args = parser.parse_args()
 freq = args.frequency
@@ -383,24 +390,39 @@ if not os.path.exists(args.image):
     fatal("The disk-image is not found at {}".format(args.image))
 
 # Setting up all the fixed system parameters here
-# Caches: MESI Two Level Cache Hierarchy
+# Caches: MESI Three Level Cache Hierarchy
 
-from gem5.components.cachehierarchies.ruby.mesi_two_level_cache_hierarchy import (
-    MESITwoLevelCacheHierarchy,
+from gem5.components.cachehierarchies.ruby.mesi_three_level_cache_hierarchy import (
+    MESIThreeLevelCacheHierarchy,
 )
 
-cache_hierarchy = MESITwoLevelCacheHierarchy(
-    l1d_size="32kB",
-    l1d_assoc=8,
-    l1i_size="32kB",
-    l1i_assoc=8,
-    l2_size="256kB",
-    l2_assoc=16,
-    num_l2_banks=args.core,
-    l2_data_lat=10,
-    l2_tag_lat=2,
-    index_bits_shift=0,
-)
+
+if args.cachecfg == "skylake":
+    cache_hierarchy = MESIThreeLevelCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=4,
+        l1i_size="32kB",
+        l1i_assoc=4,
+        l2_size="1024kB",
+        l2_assoc=16,
+        l3_size="1408kB",
+        l3_assoc=11,
+        num_l3_banks=args.core,
+    )
+elif args.cachecfg == "realistic":
+    cache_hierarchy = MESIThreeLevelCacheHierarchy(
+        l1d_size="32kB",
+        l1d_assoc=4,
+        l1i_size="32kB",
+        l1i_assoc=4,
+        l2_size="256kB",
+        l2_assoc=8,
+        l3_size="1024kB",
+        l3_assoc=16,
+        num_l3_banks=args.core,
+    )
+
+
 # Memory: Dual Channel DDR4 2400 DRAM device.
 # The X86 board only supports 3 GB of main memory.
 

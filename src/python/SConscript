@@ -111,6 +111,10 @@ PySource('gem5.components.cachehierarchies.ruby',
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/moesi_hammer_two_level_cache_hierarchy.py')
 PySource('gem5.components.cachehierarchies.ruby',
+    'gem5/components/cachehierarchies/ruby/mesi_three_level_cache_hierarchy.py')
+PySource('gem5.components.cachehierarchies.ruby',
+    'gem5/components/cachehierarchies/ruby/mesi_three_level_cache_hierarchy_nine.py')
+PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/mesi_two_level_cache_hierarchy.py')
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/mesi_two_level_cache_hierarchy_flush.py')
@@ -131,6 +135,8 @@ PySource('gem5.components.cachehierarchies.ruby',
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/msi_two_level_cache_hierarchy_exc.py')
 PySource('gem5.components.cachehierarchies.ruby',
+    'gem5/components/cachehierarchies/ruby/msi_three_level_cache_hierarchy_exc.py')
+PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/mesi_two_level_cache_hierarchy_inc_intracomp.py')
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/msi_two_level_cache_hierarchy_nine_xor.py')
@@ -142,10 +148,16 @@ PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/msi_two_level_cache_hierarchy_nine_noxor_map.py')
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/msi_two_level_cache_hierarchy_nine_noxor_map_thesaurus.py')
+
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/msi_three_level_cache_hierarchy_nine_xor_map.py')
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/msi_three_level_cache_hierarchy_nine_noxor_map.py')
+PySource('gem5.components.cachehierarchies.ruby',
+    'gem5/components/cachehierarchies/ruby/msi_three_level_cache_hierarchy_nine_xor_map_thesaurus.py')
+PySource('gem5.components.cachehierarchies.ruby',
+    'gem5/components/cachehierarchies/ruby/msi_three_level_cache_hierarchy_nine_noxor_map_thesaurus.py')
+
 PySource('gem5.components.cachehierarchies.ruby',
     'gem5/components/cachehierarchies/ruby/mi_example_cache_hierarchy.py')
 PySource('gem5.components.cachehierarchies.ruby.caches',
@@ -160,6 +172,7 @@ PySource('gem5.components.cachehierarchies.ruby.caches',
     'gem5/components/cachehierarchies/ruby/caches/abstract_l1_cache.py')
 PySource('gem5.components.cachehierarchies.ruby.caches',
     'gem5/components/cachehierarchies/ruby/caches/abstract_l2_cache.py')
+
 PySource('gem5.components.cachehierarchies.ruby.caches.mesi_two_level',
     'gem5/components/cachehierarchies/ruby/caches/mesi_two_level/__init__.py')
 PySource('gem5.components.cachehierarchies.ruby.caches.mesi_two_level',
@@ -171,6 +184,35 @@ PySource('gem5.components.cachehierarchies.ruby.caches.mesi_two_level',
     'gem5/components/cachehierarchies/ruby/caches/mesi_two_level/l1_cache.py')
 PySource('gem5.components.cachehierarchies.ruby.caches.mesi_two_level',
     'gem5/components/cachehierarchies/ruby/caches/mesi_two_level/l2_cache.py')
+
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level/__init__.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level/directory.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level/'
+    'dma_controller.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level/l1_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level/l2_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level/l3_cache.py')
+
+
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level_nine',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level_nine/__init__.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level_nine',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level_nine/directory.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level_nine',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level_nine/'
+    'dma_controller.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level_nine',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level_nine/l1_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level_nine',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level_nine/l2_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.mesi_three_level_nine',
+    'gem5/components/cachehierarchies/ruby/caches/mesi_three_level_nine/l3_cache.py')
 
 PySource('gem5.components.cachehierarchies.ruby.caches.moesi_hammer',
     'gem5/components/cachehierarchies/ruby/caches/moesi_hammer/__init__.py')
@@ -304,6 +346,21 @@ PySource('gem5.components.cachehierarchies.ruby.caches.msi_two_level_exc',
 PySource('gem5.components.cachehierarchies.ruby.caches.msi_two_level_exc',
     'gem5/components/cachehierarchies/ruby/caches/msi_two_level_exc/l2_cache.py')
 
+
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_exc',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_exc/__init__.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_exc',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_exc/directory.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_exc',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_exc/'
+    'dma_controller.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_exc',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_exc/l1_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_exc',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_exc/l2_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_exc',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_exc/l3_cache.py')
+
 PySource('gem5.components.cachehierarchies.ruby.caches.msi_two_level_nine_xor',
     'gem5/components/cachehierarchies/ruby/caches/msi_two_level_nine_xor/__init__.py')
 PySource('gem5.components.cachehierarchies.ruby.caches.msi_two_level_nine_xor',
@@ -347,6 +404,22 @@ PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_
     'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map/l2_cache.py')
 PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map',
     'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map/l3_cache.py')
+
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/__init__.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/directory.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/'
+    'dma_controller.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/l1_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/l1_cache_sendeviction.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/l2_cache.py')
+PySource('gem5.components.cachehierarchies.ruby.caches.msi_three_level_nine_xor_map_thesaurus',
+    'gem5/components/cachehierarchies/ruby/caches/msi_three_level_nine_xor_map_thesaurus/l3_cache.py')
 
 PySource('gem5.components.cachehierarchies.ruby.caches.msi_two_level_nine_xor_map_thesaurus',
     'gem5/components/cachehierarchies/ruby/caches/msi_two_level_nine_xor_map_thesaurus/__init__.py')

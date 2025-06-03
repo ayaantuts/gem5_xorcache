@@ -1,0 +1,402 @@
+
+  // using secondary addr, primary (candidate) block
+  transition(SS, Goto_SS_SS, SS_SS) { 
+    check_phy;
+    ddd_deallocateData;
+
+    ddststs1_deallocateSTSTS;
+    ddststs_deallocateSTSTS;
+    dmt_rm1;
+    dmtS_rm1;
+    dmt_rm2;
+    dmtS_rm2;
+    populate_secondary_logical_data;
+    
+    entropy_rm_primary_data;
+    entropy_rm_secondary_data;
+
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data;
+
+    // ppp_populatePhyData_fromBlk1and2;
+    find_centroid_compress_write_fromBlk1and2;
+
+    entropy_reg_xor_data;
+
+    entropyXOR_reg_xor_data;
+
+    ddl2_deallocateL2CacheBlock;
+
+    cj_clearStallCount;
+
+    js_popTriggerQueue_success; //success
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+  transition(SS, Goto_SS_MTSB, SS_MTSB) { 
+    check_phy;
+    ddd_deallocateData;
+
+    ddststs1_deallocateSTSTS;
+    // ddststs_deallocateSTSTS;
+    dmt_rm1;
+    dmtS_rm1;
+    dmt_rm2;
+    dmtS_rm2;
+    populate_secondary_logical_data;
+    
+    entropy_rm_primary_data;
+    entropy_rm_secondary_data;
+
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data;
+
+    // ppp_populatePhyData_fromBlk1and2;
+    find_centroid_compress_write_fromBlk1and2;
+
+
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    ddl2_deallocateL2CacheBlock;
+    set_primary_as_cache_entry;
+
+    cj_clearStallCount;
+    js_popTriggerQueue_success; //success
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+  transition(SS, Goto_SS_L2ONLY, SS_L2ONLY) {
+    check_phy;
+    ddd_deallocateData;
+    dddns_deallocateDataNS;
+
+    ddststs1_deallocateSTSTS;
+    ddst2_deallocateST;
+
+    dmt_rm1;
+    dmtS_rm1;
+    dmt_rm2;
+    dmtNS_rm2;
+
+    populate_secondary_logical_data;
+    
+    entropy_rm_primary_data;
+    entropy_rm_secondary_data;
+
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data;
+
+    // ppp_populatePhyData_fromBlk1and2;
+    find_centroid_compress_write_fromBlk1and2;
+
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    ddl2_deallocateL2CacheBlock;
+    set_primary_as_cache_entry;
+
+    cj_clearStallCount;
+    js_popTriggerQueue_success; //success
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+  
+  transition(L2ONLY, Goto_L2ONLY_SS, L2ONLY_SS) { 
+    check_phy;
+    ddd_deallocateData;
+
+    ddst1_deallocateST;
+    ddststs_deallocateSTSTS;
+
+    dmt_rm1;
+    dmtNS_rm1;
+    dmt_rm2;
+    dmtS_rm2;
+
+    populate_secondary_logical_data;
+    
+    entropy_rm_primary_data;
+    entropy_rm_secondary_data;
+
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data;
+
+    // ppp_populatePhyData_fromBlk1and2;
+    find_centroid_compress_write_fromBlk1and2;
+
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    dddns1_deallocateDataNS; // primary is no longer nonshared due to xor
+    ddl2_deallocateL2CacheBlock;
+    set_primary_as_cache_entry;
+
+    cj_clearStallCount;
+    js_popTriggerQueue_success; //success
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+  transition(L2ONLY, Goto_L2ONLY_MTSB, L2ONLY_MTSB) { 
+    check_phy;
+    ddd_deallocateData;
+
+    ddst1_deallocateST;
+    // ddststs_deallocateSTSTS;
+    
+    dmt_rm1;
+    dmtNS_rm1;
+    dmt_rm2;
+    dmtS_rm2;
+
+    populate_secondary_logical_data;
+    
+    entropy_rm_primary_data;
+    entropy_rm_secondary_data;
+
+    entropyRaw_reg_primary_data;
+    entropyRaw_reg_secondary_data;
+
+    // ppp_populatePhyData_fromBlk1and2;
+    find_centroid_compress_write_fromBlk1and2;
+
+    entropy_reg_xor_data;
+    entropyXOR_reg_xor_data;
+
+    dddns1_deallocateDataNS; // primary is no longer nonshared due to xor
+    ddl2_deallocateL2CacheBlock;
+    set_primary_as_cache_entry;
+
+    cj_clearStallCount;
+    js_popTriggerQueue_success; //success
+
+    uur_profileDirRead;
+    uur_profileDMTRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+    uur_profileDataRead;
+  }
+  
+  // transition(MT_SB,Goto_MTSB_SS, MTSB_SS) {
+  //   check_phy;
+  //   ddd_deallocateData;
+
+  //   // ddststs1_deallocateSTSTS;
+  //   ddststs_deallocateSTSTS;
+
+  //   dmt_rm1;
+  //   dmtS_rm1;
+  //   dmt_rm2;
+  //   dmtS_rm2;
+
+  //   populate_secondary_logical_data;
+    
+  //   entropy_rm_primary_data;
+  //   entropy_rm_secondary_data;
+
+  //   entropyRaw_reg_primary_data;
+  //   entropyRaw_reg_secondary_data;
+
+  //   ppp_populatePhyData_fromBlk1and2;
+
+  //   entropy_reg_xor_data;
+  //   entropyXOR_reg_xor_data;
+
+  //   ddl2_deallocateL2CacheBlock;
+  //   set_primary_as_cache_entry;
+
+  //   cj_clearStallCount;
+  //   js_popTriggerQueue_success; //success
+
+  //   uur_profileDirRead;
+  //   uur_profileDMTRead;
+  //   uur_profileTagRead;
+  //   uur_profileDataRead;
+  //   uur_profileDataRead;
+  // }
+  // transition(MT_SB,Goto_MTSB_MTSB, MTSB_MTSB) {
+  //   check_phy;
+  //   ddd_deallocateData;
+
+  //   // ddststs1_deallocateSTSTS;
+  //   // ddststs_deallocateSTSTS;
+  //   dmt_rm1;
+  //   dmtS_rm1;
+  //   dmt_rm2;
+  //   dmtS_rm2;
+
+  //   populate_secondary_logical_data;
+    
+  //   entropy_rm_primary_data;
+  //   entropy_rm_secondary_data;
+
+  //   entropyRaw_reg_primary_data;
+  //   entropyRaw_reg_secondary_data;
+
+  //   ppp_populatePhyData_fromBlk1and2;
+
+  //   entropy_reg_xor_data;
+  //   entropyXOR_reg_xor_data;
+
+  //   ddl2_deallocateL2CacheBlock;
+  //   set_primary_as_cache_entry;
+
+  //   cj_clearStallCount;
+  //   js_popTriggerQueue_success; //success
+
+  //   uur_profileDirRead;
+  //   uur_profileDMTRead;
+  //   uur_profileTagRead;
+  //   uur_profileDataRead;
+  //   uur_profileDataRead;
+  // }
+  // transition(MT_SB,Goto_MTSB_L2ONLY, MTSB_L2ONLY) {
+  //   check_phy;
+  //   ddd_deallocateData;
+  //   dddns_deallocateDataNS;
+
+  //   ddst2_deallocateST;
+
+  //   dmt_rm1;
+  //   dmtS_rm1;
+  //   dmt_rm2;
+  //   dmtNS_rm2;
+
+  //   populate_secondary_logical_data;
+    
+  //   entropy_rm_primary_data;
+  //   entropy_rm_secondary_data;
+
+  //   entropyRaw_reg_primary_data;
+  //   entropyRaw_reg_secondary_data;
+
+  //   ppp_populatePhyData_fromBlk1and2;
+
+  //   entropy_reg_xor_data;
+  //   entropyXOR_reg_xor_data;
+
+  //   ddl2_deallocateL2CacheBlock;
+  //   set_primary_as_cache_entry;
+
+  //   cj_clearStallCount;
+  //   js_popTriggerQueue_success; //success
+
+  //   uur_profileDirRead;
+  //   uur_profileDMTRead;
+  //   uur_profileTagRead;
+  //   uur_profileDataRead;
+  //   uur_profileDataRead;
+  // }
+
+  // unblock for mtsb
+  // transition(MTSB_SS, Unblock, SS_SS) {
+  //   nnu_addSharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   kd2_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+  // transition(MTSB_MTSB, Unblock, SS_MTSB) {
+  //   nnu_addSharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   kd2_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+  // transition(MTSB_MTSB, Unblock2, MTSB_SS) {
+  //   nnus_addSecondarySharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd2_wakeUpDependents;
+  //   kd1_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+  // transition(MTSB_L2ONLY, Unblock, SS_L2ONLY) {
+  //   nnu_addSharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd1_wakeUpDependents;
+  //   kd2_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+
+  // transition(L2ONLY_MTSB, Unblock2, L2ONLY_SS) {
+  //   nnus_addSecondarySharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd2_wakeUpDependents;
+  //   kd1_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+  // transition(SS_MTSB, Unblock2, SS_SS) {
+  //   nnus_addSecondarySharerFromUnblock;
+  //   k_popUnblockQueue;
+  //   kd2_wakeUpDependents;
+  //   kd1_wakeUpDependents;
+
+  //   uur_profileDirRead;
+  // }
+  
+
+
+  // %%%%%%%%%%%%%%%%%%%%%% cannot xor, try again %%%%%%%%%%%%%%%%%%%%%%
+  transition({SS}, Stall_XOR) {
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+    ij_increaseStallCount;
+    znj_recycleTriggerQueue;
+  }
+  transition(L2ONLY, Stall_XOR) {
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+    ij_increaseStallCount;
+    znj_recycleTriggerQueue;
+  }
+
+  // %%%%%%%%%%%%%%%%%%%%%% skip xor, timed out %%%%%%%%%%%%%%%%%%%%%%
+  transition(SS, Skip_XOR) {
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+    cj_clearStallCount;
+    jf_popTriggerQueue_fail;
+  }
+  transition(L2ONLY, Skip_XOR) {
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+    cj_clearStallCount;
+    jf_popTriggerQueue_fail;
+  }
+  transition({
+    SS_OR_MT_MB, MT,
+    SS_SS, SS_L2ONLY, L2ONLY_SS, 
+    SS_MTSB, MTSB_SS, L2ONLY_MTSB, MTSB_L2ONLY, MTSB_MTSB,
+    SS_SSMB_s,L2ONLY_SSMB_s,SSMB_L2ONLY_s,SS_L2ONLY_s,SSMB_SS_s,L2ONLY_SS_s,L2ONLY_s,
+    SS_L2ONLY_r2,SS_SI_r2,L2ONLY_SS_r1,SI_L2ONLY_r1,SI_SS_r1,L2ONLY_SI_r2,
+    L2ONLY_SS_UB2, MTSB_SS_UB2, SS_L2ONLY_UB1, SS_SS_UB2,SS_SS_UB1,L2ONLY_SS_UB1,SS_L2ONLY_UB2,
+    M_I, I_I, S_I,
+    SS_s, I_I_s, I_I_sm, S_I_s,
+    II_L2ONLY_cd,L2ONLY_II_dc,SI_II_dc,SI_L2ONLY_dd,
+    SS_UB
+    }, Skip_XOR) 
+  {
+    cj_clearStallCount;
+    jf_popTriggerQueue_fail;
+  }

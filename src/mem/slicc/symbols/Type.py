@@ -93,6 +93,9 @@ class Type(Symbol):
         if self.ident in ("CacheMemoryProbe"):
             self["cache"] = "yes"
 
+        if self.ident in ("CacheMemoryCounter"):
+            self["cache"] = "yes"
+
         if self.ident in ("CacheMemoryFASector"):
             self["cache"] = "yes"
 

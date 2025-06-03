@@ -1,7 +1,7 @@
 # this script uses x86_dump binary to dump cache content and address periodically
 
 # conpile:
-#scons build/X86_MyMESI2/gem5.opt --default=X86 PROTOCOL=MESI_Two_Level_my SLICC_HTML=True -j24
+#scons build/X86_MyMESI2/gem5.opt --default=X86 PROTOCOL=MESI_Three_Level_my SLICC_HTML=True -j24
 #scons build/X86_test/gem5.opt -j24 --default=x86
 
 import sys
@@ -20,7 +20,7 @@ parser.add_argument(
     type=int,
     required=False,
     help="use plotly to plot ipc",
-    default=1,
+    default=0,
 )
 parser.add_argument(
     "--mode",
@@ -29,6 +29,14 @@ parser.add_argument(
     help="tick or inst mode",
     choices=["tick", "inst", "kvm"],
     default="inst",
+)
+parser.add_argument(
+    "--cachecfg",
+    type=str,
+    required=False,
+    help="for 3 level cache, choose either skylake or worse",
+    choices=["skylake", "realistic"],
+    default="skylake",
 )
 parser.add_argument(
     "--run",
@@ -135,16 +143,16 @@ if not isExist:
    os.makedirs(path)
 
 if args.plotly == 0:
-    gem5_binary_path = f"build/X86_{design}/gem5.fast"
+    # gem5_binary_path = f"build/X86_{design}/gem5.fast"
+    # if not os.path.isfile(gem5_binary_path): 
+    gem5_binary_path = f"build/X86_{design}/gem5.opt"
     if not os.path.isfile(gem5_binary_path): 
-        gem5_binary_path = f"build/X86_{design}/gem5.opt"
-        if not os.path.isfile(gem5_binary_path): 
-            print(f"gem5 binary file not exist!")
-            exit(1)
+        print(f"gem5 binary file {gem5_binary_path} not exist!")
+        exit(1)
 elif args.plotly == 1:
     gem5_binary_path = f"build/X86_{design}/gem5.opt"
     if not os.path.isfile(gem5_binary_path): 
-        print(f"gem5 binary file not exist!")
+        print(f"gem5 binary {gem5_binary_path} file not exist!")
         exit(1)
 else: assert False
 
@@ -179,6 +187,8 @@ if args.benchmark:
     cmd_list[0] += f" --benchmark {args.benchmark}"
 if args.run:
     cmd_list[0] += f" --run {args.run}"
+if args.cachecfg:
+    cmd_list[0] += f" --cachecfg {args.cachecfg}"
     
 
 cmd_list[0] += f" --partition 1"

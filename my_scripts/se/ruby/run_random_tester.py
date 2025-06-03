@@ -3,7 +3,6 @@
 
 import sys
 import argparse, subprocess, os, re
-from tqdm import tqdm
 from scipy.stats import gmean
 parser = argparse.ArgumentParser(description="config.")
 parser.add_argument(
@@ -31,6 +30,7 @@ parser.add_argument(
     choices=["baseline", "noisy", "decoupled", "compress", "dedup", "bdixor", \
              "msi", "msi_nine", \
              "msi_exc_nobdi", "msi_exc_bdi", \
+             "msi_exc3", \
              "mesi2_nobdi", "mesi2_bdi", \
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
@@ -101,6 +101,10 @@ elif args.protocol == "msi_exc_nobdi":
 elif args.protocol == "msi_exc_bdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_BDI"
+
+elif args.protocol == "msi_exc3":
+    design = "MyMSI_EXC3"
+    design_out = "MyMSI_EXC3"
 
 elif args.protocol == "mesi2_nobdi":
     design = "MyMESI_INTRACOMP"

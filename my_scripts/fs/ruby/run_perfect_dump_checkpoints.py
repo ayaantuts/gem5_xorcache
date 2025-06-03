@@ -4,7 +4,7 @@
 
 import sys
 import argparse, subprocess, os, re
-from tqdm import tqdm
+# from tqdm import tqdm
 from scipy.stats import gmean
 parser = argparse.ArgumentParser(description="config.")
 parser.add_argument(
@@ -13,6 +13,14 @@ parser.add_argument(
     help="which protocol to run",
     choices=["baseline", "noisy", "decoupled","compress","dedup", "bdixor","hammer","dump"],
     required=True,
+)
+parser.add_argument(
+    "--cachecfg",
+    type=str,
+    required=False,
+    help="for 3 level cache, choose either skylake or worse",
+    choices=["skylake", "realistic"],
+    default="skylake",
 )
 parser.add_argument(
     "--begin",
@@ -110,9 +118,9 @@ else:
     testname= "fs_perfect_no_hook"
     py_config_file_name = "perfect.py"
 
-path = f"m5out/m5out_{testname}/{design}/{args.set}/{args.benchmark}"
+path = f"m5out/m5out_{testname}/{design}_{args.cachecfg}/{args.set}/{args.benchmark}"
 if args.index_bits_shift != 0:
-    path = f"m5out/m5out_{testname}/{design}_shift{args.index_bits_shift}/{args.set}/{args.benchmark}"
+    path = f"m5out/m5out_{testname}/{design}__{args.cachecfg}_shift{args.index_bits_shift}/{args.set}/{args.benchmark}"
 
 isExist = os.path.exists(path)
 if not isExist:
@@ -151,6 +159,10 @@ if args.core:
 
 
 cmd_list[0] += f" --benchmark {args.benchmark} --partition 1"
+    
+
+if args.cachecfg:
+    cmd_list[0] += f" --cachecfg {args.cachecfg}"
     
 if not args.flags:
     p = subprocess.Popen(cmd_list, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

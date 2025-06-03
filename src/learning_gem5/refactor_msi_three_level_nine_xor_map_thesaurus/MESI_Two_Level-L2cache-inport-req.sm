@@ -1,0 +1,704 @@
+Addr data_array_select_victim(Addr addr) {
+  Addr victim := addr;
+  if (dataNS.candidateCount(addr) > 0) {
+    victim := dataNS.candidateProbe(addr);
+    // DPRINTF(RubyReplacement, "<data_array_select_victim> No room in the data (util=%f) NS\n", data.getUtilByte());
+  } else {
+    victim := data.candidateProbe(addr);
+    // DPRINTF(RubyReplacement, "<data_array_select_victim> No room in the data (util=%f)\n", data.getUtilByte());
+  }
+
+  if (victim == addr) {// TODO: deadlock detected
+    DPRINTF(RubySlicc, "deadlock detected!\n");
+  }
+
+  return victim;
+}
+
+Addr tag_array_select_victim(Addr addr) {
+  Addr victim := addr;
+  if (tagNS.candidateCount(addr) > 0) {
+    victim := tagNS.candidateProbe(addr);
+    // DPRINTF(RubyReplacement, "<tag_array_select_victim> No room in the tag (util=%f) NS\n", tag.getUtil());
+  } else {
+    victim := tag.cacheProbe(addr);
+    // DPRINTF(RubyReplacement, "<tag_array_select_victim> No room in the tag (util=%f)\n", tag.getUtil());
+  }
+
+  if (victim == addr) {// TODO: deadlock detected
+    DPRINTF(RubySlicc, "deadlock detected!\n");
+  }
+
+  return victim;
+}
+
+Addr dir_select_victim(Addr addr) {
+  Addr victim := dir.cacheProbe(addr);
+
+  if (victim == addr) {// TODO: deadlock detected
+    DPRINTF(RubySlicc, "deadlock detected!\n");
+  }
+
+  return victim;
+}
+
+Event data_array_replacement(Addr victim) {
+  Entry L2cache_entry := getCacheEntry(victim);
+  Event toTrigger := Event:L2_Replacement;
+
+  if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+    if (isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement_data_dirty_dirty;
+    } else if (!isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement_data_clean_clean;
+    } else if (!isDirty(L2cache_entry) && isSecondaryDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement_data_clean_dirty;
+    } else if (isDirty(L2cache_entry) && !isSecondaryDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement_data_dirty_clean;
+    }
+  } else {
+    if (isDirty(L2cache_entry)) {
+      toTrigger := Event:L2_Replacement;
+    } 
+    else {
+      toTrigger := Event:L2_Replacement_clean;
+    }
+  }
+  
+  // DPRINTF(RubyReplacement, "<data_array_replacement> %s, victim=%#x\n", toTrigger, victim);
+  return toTrigger;
+}
+
+Event tag_array_replacement(Addr victim) {
+  if (L2cache.isSecondaryAddr(victim) || L2cache.hasSecondaryAddr(victim)) {
+    // victim has a pair
+    // check for empty space in data
+    Addr primary_victim := victim;
+    if (L2cache.isSecondaryAddr(victim)) {
+      primary_victim := L2cache.getPrimaryAddr(victim);
+    }
+    if (data.cacheAvail(primary_victim, block_size_in_bytes)) {
+      // DPRINTF(RubyReplacement, "<tag_array_replacement> ok, we have data space for this replacement\n");
+    } else {
+      // DPRINTF(RubyReplacement, "<tag_array_replacement> run out of data space for this replacement\n");
+      error("tag_array_replacement: run out of data space for this replacement\n");
+    }
+  }
+
+  Event toTrigger := basic_replacement(victim);
+
+  // DPRINTF(RubyReplacement, "<tag_array_replacement> %s, victim=%#x\n", toTrigger, victim);
+  return toTrigger;
+}
+
+Event dir_array_replacement(Addr victim) {
+  Event toTrigger := basic_replacement(victim);
+
+  // DPRINTF(RubyReplacement, "<dir_array_replacement> %s, victim=%#x\n", toTrigger, victim);
+  return toTrigger;
+}
+
+bool does_partner_expansion_induce_data_eviction(Addr addr) {
+  if (!L2cache.hasSecondaryAddr(addr) && !L2cache.isSecondaryAddr(addr)) {
+    return false;
+  }
+
+  // need to check data space for partner expansion
+  Addr partner_addr := get_partner_addr(addr);
+  if (data.cacheAvail(partner_addr, block_size_in_bytes)) {
+    return false;
+  } else {
+    return true;
+  }
+}
+
+in_port(L1RequestL2Network_in, RequestMsg, L1RequestToL2Cache, rank = 0) {
+  if(L1RequestL2Network_in.isReady(clockEdge())) {
+    peek(L1RequestL2Network_in,  RequestMsg) {
+      Entry cache_entry := getCacheEntry(in_msg.addr);
+      TBE tbe := TBEs[in_msg.addr];
+
+      assert(machineIDToMachineType(in_msg.Requestor) == MachineType:L1Cache);
+      assert(in_msg.Destination.isElement(machineID));
+
+      Event toTrigger := L1Cache_request_type_to_event(in_msg.Type, in_msg.addr,
+                                              in_msg.Requestor, cache_entry, tbe);
+      
+      bool is_secondary := L2cache.isSecondaryAddr(in_msg.addr);
+      bool has_secondary := is_valid(cache_entry) && L2cache.hasSecondaryAddr(in_msg.addr);
+
+
+      DPRINTF(RubySlicc, "Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+
+      if (!is_secondary && !has_secondary) {
+        if (in_msg.Type == CoherenceRequestType:GETS || in_msg.Type == CoherenceRequestType:GET_INSTR) {
+          // data, tag, dir replacement
+          if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) &&  (data.cacheAvail(in_msg.addr, block_size_in_bytes))) {
+            assert(L2cache.cacheAvail(in_msg.addr));
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else if (!data.cacheAvail(in_msg.addr, block_size_in_bytes)) {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          } else if (!tag.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "[tag repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := tag_array_select_victim(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event tag_repl_event := tag_array_replacement(victim);
+            trigger(tag_repl_event, victim, L2cache_entry, TBEs[victim]);
+          } else if (!dir.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := dir_select_victim(in_msg.addr);
+            if (does_partner_expansion_induce_data_eviction(victim)) {
+              Addr partner_addr := get_partner_addr(victim);
+              Addr data_victim := data_array_select_victim(partner_addr);
+              Entry L2cache_entry := getCacheEntry(data_victim);
+              Event data_repl_event := data_array_replacement(data_victim);
+              trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+            } else {
+              Entry L2cache_entry := getCacheEntry(victim);
+              Event dir_repl_event := dir_array_replacement(victim);
+              trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            assert(false);
+          }
+        }
+        else if (in_msg.Type == CoherenceRequestType:GETX || in_msg.Type == CoherenceRequestType:UPGRADE) {
+          // unxor, maybe data replacement
+          if (dir.cacheAvail(in_msg.addr)) {
+            assert(L2cache.cacheAvail(in_msg.addr));
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else {
+            DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := dir_select_victim(in_msg.addr);
+            if (does_partner_expansion_induce_data_eviction(victim)) {
+              Addr partner_addr := get_partner_addr(victim);
+              Addr data_victim := data_array_select_victim(partner_addr);
+              Entry L2cache_entry := getCacheEntry(data_victim);
+              Event data_repl_event := data_array_replacement(data_victim);
+              trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+            } else {
+              Entry L2cache_entry := getCacheEntry(victim);
+              Event dir_repl_event := dir_array_replacement(victim);
+              trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+        }
+        else if (toTrigger == Event:L1_PUTX && getState(tbe, cache_entry, in_msg.addr) == State:MT) {
+          // XOR compression
+          // if failed, insert tag, data
+          // if success, insert tag, share data with other block
+          assert(dir.cacheAvail(in_msg.addr));
+
+          if (dmt.isXORPolicyBalanced()) {
+            if (dmtShared.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold() && tag.cacheAvail(in_msg.addr)
+              && (dmtShared.hasRegisteredCandidate(in_msg.DataBlk) || ((!data.cacheAvail(in_msg.addr, block_size_in_bytes) || data.cacheFull())))
+              ) {
+              // Addr candidate := singularTagShared.candidateProbe(in_msg.addr);
+              Addr candidate := in_msg.addr;
+              if (dmtShared.hasRegisteredCandidate(in_msg.DataBlk)) {
+                candidate := dmtShared.getRandomRegisteredCandidate(in_msg.DataBlk);
+              } else {
+                candidate := dmtShared.getAnyRandomRegisteredCandidate();
+              }
+              Entry xor_candidate_cache_entry := getCacheEntry(candidate);
+              TBE xor_candidate_tbe := TBEs[candidate];
+
+              DataBlock newData := dataProc.peek_preproc(xor_candidate_cache_entry.DataBlk_phy, in_msg.DataBlk);
+              // int comp_data_size_in_byte := dataProc.peek_compress(newData);
+              int comp_data_size_in_byte := block_size_in_bytes;
+
+              DPRINTF(RubySlicc, "XOR CAND Addr: %#x State: %s\n",
+                      candidate, getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate));
+              
+              // only need to allocate tag and dir
+              if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) && data.cacheAvail(candidate, comp_data_size_in_byte)) {
+                L2cache.pair(candidate, in_msg.addr);
+                dmtShared.remove(candidate);
+                dmt.remove(candidate);
+                // singularTag.deallocate(candidate);
+                DPRINTF(RubySlicc, "L1RequestL2Network_in: ok xor paired, primary=0x%llx, secondary=0x%llx\n",
+                  candidate, in_msg.addr);
+                Event toTrigger_xor := toTrigger_to_xor_event(toTrigger, getState(tbe, cache_entry, in_msg.addr));
+                trigger(toTrigger_xor, in_msg.addr, xor_candidate_cache_entry, xor_candidate_tbe);
+              }
+              else if (!tag.cacheAvail(in_msg.addr)) {
+                DPRINTF(RubyReplacement, "[tag repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                // No room in the L2 tag, so we need to make room before handling the request
+                Addr victim := tag_array_select_victim(in_msg.addr);
+                Entry L2cache_entry := getCacheEntry(victim);
+                Event tag_repl_event := tag_array_replacement(victim);
+                trigger(tag_repl_event, victim, L2cache_entry, TBEs[victim]);
+              }
+              else if (!dir.cacheAvail(in_msg.addr)) {
+                DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                Addr victim := dir_select_victim(in_msg.addr);
+                if (does_partner_expansion_induce_data_eviction(victim)) {
+                  Addr partner_addr := get_partner_addr(victim);
+                  Addr data_victim := data_array_select_victim(partner_addr);
+                  Entry L2cache_entry := getCacheEntry(data_victim);
+                  Event data_repl_event := data_array_replacement(data_victim);
+                  trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+                } else {
+                  Entry L2cache_entry := getCacheEntry(victim);
+                  Event dir_repl_event := dir_array_replacement(victim);
+                  trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+              else if (!data.cacheAvail(candidate, comp_data_size_in_byte)) { // need expansion
+                DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                // No room in the L2 data, so we need to make room before handling the request
+                Addr victim := data_array_select_victim(in_msg.addr);
+                Event toTrigger := data_array_replacement(victim);
+                Entry L2cache_entry := getCacheEntry(victim);
+                trigger(toTrigger, victim, L2cache_entry, TBEs[victim]);
+              }
+            } 
+            else {
+                DPRINTF(RubySlicc, "candidate ct not enough: %d or tag.notavail (tag.avail=%d) or data.avial (data.avai=%d)\n", dmtShared.getAnyRegisteredCandidateCt(), 
+                tag.cacheAvail(in_msg.addr), data.cacheAvail(in_msg.addr, block_size_in_bytes));
+            }
+          } else if (dmt.isXORPolicySynergy()) {
+            if (dmtShared.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold() && tag.cacheAvail(in_msg.addr)
+              && (dmtShared.hasRegisteredCandidate(in_msg.DataBlk))) {
+              // Addr candidate := singularTagShared.candidateProbe(in_msg.addr);
+              Addr candidate := in_msg.addr;
+              if (dmtShared.hasRegisteredCandidate(in_msg.DataBlk)) {
+                candidate := dmtShared.getRandomRegisteredCandidate(in_msg.DataBlk);
+              } else {
+                assert(false);
+              }
+              Entry xor_candidate_cache_entry := getCacheEntry(candidate);
+              TBE xor_candidate_tbe := TBEs[candidate];
+
+              DataBlock newData := dataProc.peek_preproc(xor_candidate_cache_entry.DataBlk_phy, in_msg.DataBlk);
+              // int comp_data_size_in_byte := dataProc.peek_compress(newData);
+              int comp_data_size_in_byte := block_size_in_bytes;
+
+              DPRINTF(RubySlicc, "XOR CAND Addr: %#x State: %s\n",
+                      candidate, getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate));
+              
+              // only need to allocate tag and dir
+              if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) && data.cacheAvail(candidate, comp_data_size_in_byte)) {
+                L2cache.pair(candidate, in_msg.addr);
+                dmtShared.remove(candidate);
+                dmt.remove(candidate);
+                // singularTag.deallocate(candidate);
+                DPRINTF(RubySlicc, "L1RequestL2Network_in: ok xor paired, primary=0x%llx, secondary=0x%llx\n",
+                  candidate, in_msg.addr);
+                Event toTrigger_xor := toTrigger_to_xor_event(toTrigger, getState(tbe, cache_entry, in_msg.addr));
+                trigger(toTrigger_xor, in_msg.addr, xor_candidate_cache_entry, xor_candidate_tbe);
+              }
+              else if (!tag.cacheAvail(in_msg.addr)) {
+                DPRINTF(RubyReplacement, "[tag repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                // No room in the L2 tag, so we need to make room before handling the request
+                Addr victim := tag_array_select_victim(in_msg.addr);
+                Entry L2cache_entry := getCacheEntry(victim);
+                Event tag_repl_event := tag_array_replacement(victim);
+                trigger(tag_repl_event, victim, L2cache_entry, TBEs[victim]);
+              }
+              else if (!dir.cacheAvail(in_msg.addr)) {
+                DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                Addr victim := dir_select_victim(in_msg.addr);
+                if (does_partner_expansion_induce_data_eviction(victim)) {
+                  Addr partner_addr := get_partner_addr(victim);
+                  Addr data_victim := data_array_select_victim(partner_addr);
+                  Entry L2cache_entry := getCacheEntry(data_victim);
+                  Event data_repl_event := data_array_replacement(data_victim);
+                  trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+                } else {
+                  Entry L2cache_entry := getCacheEntry(victim);
+                  Event dir_repl_event := dir_array_replacement(victim);
+                  trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+              else if (!data.cacheAvail(candidate, comp_data_size_in_byte)) { // need expansion
+                DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                // No room in the L2 data, so we need to make room before handling the request
+                Addr victim := data_array_select_victim(in_msg.addr);
+                Event toTrigger := data_array_replacement(victim);
+                Entry L2cache_entry := getCacheEntry(victim);
+                trigger(toTrigger, victim, L2cache_entry, TBEs[victim]);
+              }
+            } 
+            else {
+                DPRINTF(RubySlicc, "candidate ct not enough: %d or tag.notavail (tag.avail=%d) or data.avial (data.avai=%d)\n", dmtShared.getAnyRegisteredCandidateCt(), 
+                tag.cacheAvail(in_msg.addr), data.cacheAvail(in_msg.addr, block_size_in_bytes));
+            }
+          } else if (dmt.isXORPolicyOppurtunistic()) {
+            if (dmtShared.getAnyRegisteredCandidateCt() > singularTagShared.getCandidateCtThreshold() && tag.cacheAvail(in_msg.addr)
+              && (dmtShared.hasAnyRegisteredCandidate())
+              ) {
+              // Addr candidate := singularTagShared.candidateProbe(in_msg.addr);
+              Addr candidate := in_msg.addr;
+              if (dmtShared.hasRegisteredCandidate(in_msg.DataBlk)) {
+                candidate := dmtShared.getRandomRegisteredCandidate(in_msg.DataBlk);
+              } else {
+                candidate := dmtShared.getAnyRandomRegisteredCandidate();
+              }
+              Entry xor_candidate_cache_entry := getCacheEntry(candidate);
+              TBE xor_candidate_tbe := TBEs[candidate];
+
+              DataBlock newData := dataProc.peek_preproc(xor_candidate_cache_entry.DataBlk_phy, in_msg.DataBlk);
+              // int comp_data_size_in_byte := dataProc.peek_compress(newData);
+              int comp_data_size_in_byte := block_size_in_bytes;
+
+              DPRINTF(RubySlicc, "XOR CAND Addr: %#x State: %s\n",
+                      candidate, getState(xor_candidate_tbe, xor_candidate_cache_entry, candidate));
+              
+              // only need to allocate tag and dir
+              if (tag.cacheAvail(in_msg.addr) && dir.cacheAvail(in_msg.addr) && data.cacheAvail(candidate, comp_data_size_in_byte)) {
+                L2cache.pair(candidate, in_msg.addr);
+                dmtShared.remove(candidate);
+                dmt.remove(candidate);
+                // singularTag.deallocate(candidate);
+                DPRINTF(RubySlicc, "L1RequestL2Network_in: ok xor paired, primary=0x%llx, secondary=0x%llx\n",
+                  candidate, in_msg.addr);
+                Event toTrigger_xor := toTrigger_to_xor_event(toTrigger, getState(tbe, cache_entry, in_msg.addr));
+                trigger(toTrigger_xor, in_msg.addr, xor_candidate_cache_entry, xor_candidate_tbe);
+              }
+              else if (!tag.cacheAvail(in_msg.addr)) {
+                DPRINTF(RubyReplacement, "[tag repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                // No room in the L2 tag, so we need to make room before handling the request
+                Addr victim := tag_array_select_victim(in_msg.addr);
+                Entry L2cache_entry := getCacheEntry(victim);
+                Event tag_repl_event := tag_array_replacement(victim);
+                trigger(tag_repl_event, victim, L2cache_entry, TBEs[victim]);
+              }
+              else if (!dir.cacheAvail(in_msg.addr)) {
+                DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                Addr victim := dir_select_victim(in_msg.addr);
+                if (does_partner_expansion_induce_data_eviction(victim)) {
+                  Addr partner_addr := get_partner_addr(victim);
+                  Addr data_victim := data_array_select_victim(partner_addr);
+                  Entry L2cache_entry := getCacheEntry(data_victim);
+                  Event data_repl_event := data_array_replacement(data_victim);
+                  trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+                } else {
+                  Entry L2cache_entry := getCacheEntry(victim);
+                  Event dir_repl_event := dir_array_replacement(victim);
+                  trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+                }
+              }
+              else if (!data.cacheAvail(candidate, comp_data_size_in_byte)) { // need expansion
+                DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                  in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                  in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                  toTrigger, is_secondary, has_secondary);
+                // No room in the L2 data, so we need to make room before handling the request
+                Addr victim := data_array_select_victim(in_msg.addr);
+                Event toTrigger := data_array_replacement(victim);
+                Entry L2cache_entry := getCacheEntry(victim);
+                trigger(toTrigger, victim, L2cache_entry, TBEs[victim]);
+              }
+            } 
+            else {
+                DPRINTF(RubySlicc, "candidate ct not enough: %d or tag.notavail (tag.avail=%d) or data.avial (data.avai=%d)\n", dmtShared.getAnyRegisteredCandidateCt(), 
+                tag.cacheAvail(in_msg.addr), data.cacheAvail(in_msg.addr, block_size_in_bytes));
+            }
+          } else {
+            error("unknown xor policy\n");
+          }
+          
+          if (!data.cacheAvail(in_msg.addr, block_size_in_bytes)) {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          }
+          if (!tag.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "[tag repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := tag_array_select_victim(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event tag_repl_event := tag_array_replacement(victim);
+            trigger(tag_repl_event, victim, L2cache_entry, TBEs[victim]);
+          }
+          assert(L2cache.cacheAvail(in_msg.addr));
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        }
+        else {
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        }
+
+      } else if (is_secondary) {
+        if (in_msg.Type == CoherenceRequestType:GETS || in_msg.Type == CoherenceRequestType:GET_INSTR) {
+          // dir replacement (L2ONLY does not allocate dir)
+          if (!tag.cacheAvail(in_msg.addr)) { // stall any way
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          }
+          if (dir.cacheAvail(in_msg.addr)) {
+            assert(L2cache.cacheAvail(in_msg.addr));
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else if (!dir.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := dir_select_victim(in_msg.addr);
+            if (does_partner_expansion_induce_data_eviction(victim)) {
+              Addr partner_addr := get_partner_addr(victim);
+              Addr data_victim := data_array_select_victim(partner_addr);
+              Entry L2cache_entry := getCacheEntry(data_victim);
+              Event data_repl_event := data_array_replacement(data_victim);
+              trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+            } else {
+              Entry L2cache_entry := getCacheEntry(victim);
+              Event dir_repl_event := dir_array_replacement(victim);
+              trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            assert(false);
+          }
+        } else if (toTrigger == Event: L1_PUTS_last2 && (cache_entry.Sharers.count() == 0)) {
+          if (!tag.cacheAvail(in_msg.addr)) { // stall anyway
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          }
+          // unxor, maybe data replacement
+          Addr primary_addr := L2cache.getPrimaryAddr(in_msg.addr);
+          if (data.cacheAvail(primary_addr, 2*block_size_in_bytes)) { //TOFIX
+            DPRINTF(RubySlicc, "unpair ok we have data space for both primary and secondary\n");
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else if (data.cacheAvail(primary_addr, block_size_in_bytes)) {
+            DPRINTF(RubyReplacement, "can avoid the repl in the next line!!!!\n");
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(primary_addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          } else {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(primary_addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          }
+        } else if (in_msg.Type == CoherenceRequestType:GETX || in_msg.Type == CoherenceRequestType:UPGRADE) {
+          // unxor, maybe dir, data replacement
+          if (!dir.cacheAvail(in_msg.addr)) {
+            Addr victim := dir_select_victim(in_msg.addr);
+            if (does_partner_expansion_induce_data_eviction(victim)) {
+              Addr partner_addr := get_partner_addr(victim);
+              Addr data_victim := data_array_select_victim(partner_addr);
+              Entry L2cache_entry := getCacheEntry(data_victim);
+              Event data_repl_event := data_array_replacement(data_victim);
+              trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+            } else {
+              Entry L2cache_entry := getCacheEntry(victim);
+              Event dir_repl_event := dir_array_replacement(victim);
+              trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+          Addr primary_addr := L2cache.getPrimaryAddr(in_msg.addr);
+          // make sure we have space in data for the primary addr
+          if (!data.cacheAvail(primary_addr, block_size_in_bytes)) {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(primary_addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          } 
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        } else if (toTrigger == Event: L1_PUTX2 && cache_entry.Sharers.count() == 0) {
+          Addr primary_addr := L2cache.getPrimaryAddr(in_msg.addr);
+          // unpair
+          // make sure we have space in data for the secondary addr (this)
+          if (data.cacheAvail(primary_addr, 2*block_size_in_bytes)) {
+            DPRINTF(RubySlicc, "unpair ok we have data space\n");
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else {
+              DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+                in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+                in_msg.Requestor, in_msg.Type, in_msg.Destination,
+                toTrigger, is_secondary, has_secondary);
+              // No room in the L2 data, so we need to make room before handling the request
+              Addr victim := data_array_select_victim(primary_addr);
+              Event toTrigger := data_array_replacement(victim);
+              Entry L2cache_entry := getCacheEntry(victim);
+              trigger(toTrigger, victim, L2cache_entry, TBEs[victim]);
+          }
+        } else if (toTrigger == Event:L1_PUTX2 && getState(tbe, cache_entry, in_msg.addr) == State:MT) {
+          assert(false);
+        } else {
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        }
+
+      } else if (has_secondary) {
+        if (in_msg.Type == CoherenceRequestType:GETS || in_msg.Type == CoherenceRequestType:GET_INSTR) {
+          if (!tag.cacheAvail(in_msg.addr)) { // stall anyway
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          }
+          // dir replacement (L2ONLY does not allocate dir)
+          // assert(tag.cacheAvail(in_msg.addr));
+          if (dir.cacheAvail(in_msg.addr)) {
+            assert(L2cache.cacheAvail(in_msg.addr));
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else if (!dir.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := dir_select_victim(in_msg.addr);
+            if (does_partner_expansion_induce_data_eviction(victim)) {
+              Addr partner_addr := get_partner_addr(victim);
+              Addr data_victim := data_array_select_victim(partner_addr);
+              Entry L2cache_entry := getCacheEntry(data_victim);
+              Event data_repl_event := data_array_replacement(data_victim);
+              trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+            } else {
+              Entry L2cache_entry := getCacheEntry(victim);
+              Event dir_repl_event := dir_array_replacement(victim);
+              trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+            }
+          } else {
+            assert(false);
+          }
+        } else if (toTrigger == Event: L1_PUTS_last && (cache_entry.Sharers2.count() == 0)) {
+          if (!tag.cacheAvail(in_msg.addr)) { // stall anyway
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          }
+          // unxor, maybe data replacement
+          if (data.cacheAvail(in_msg.addr, 2*block_size_in_bytes)) { //TOFIX
+            DPRINTF(RubySlicc, "unpair ok we have data space for both primary and secondary\n");
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else if (data.cacheAvail(in_msg.addr, block_size_in_bytes)) {
+            DPRINTF(RubyReplacement, "can avoid the repl in the next line!!!!\n");
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          } else {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(in_msg.addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          }
+        } else if (in_msg.Type == CoherenceRequestType:GETX || in_msg.Type == CoherenceRequestType:UPGRADE) {
+          // unxor, maybe dir, data replacement
+          if (!dir.cacheAvail(in_msg.addr)) {
+            DPRINTF(RubyReplacement, "[dir repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := dir_select_victim(in_msg.addr);
+            if (does_partner_expansion_induce_data_eviction(victim)) {
+              Addr partner_addr := get_partner_addr(victim);
+              Addr data_victim := data_array_select_victim(partner_addr);
+              Entry L2cache_entry := getCacheEntry(data_victim);
+              Event data_repl_event := data_array_replacement(data_victim);
+              trigger(data_repl_event, data_victim, L2cache_entry, TBEs[data_victim]);
+            } else {
+              Entry L2cache_entry := getCacheEntry(victim);
+              Event dir_repl_event := dir_array_replacement(victim);
+              trigger(dir_repl_event, victim, L2cache_entry, TBEs[victim]);
+            }
+          }
+          Addr primary_addr := in_msg.addr;
+          // make sure we have space in data for the primary addr
+          if (!data.cacheAvail(primary_addr, block_size_in_bytes)) {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            Addr victim := data_array_select_victim(primary_addr);
+            Entry L2cache_entry := getCacheEntry(victim);
+            Event data_repl_event := data_array_replacement(victim);
+            trigger(data_repl_event, victim, L2cache_entry, TBEs[victim]);
+          } 
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        } else if (toTrigger == Event: L1_PUTX && cache_entry.Sharers2.count() == 0) {
+          Addr secondary_addr := L2cache.getSecondaryAddr(in_msg.addr);
+          // assert(data.isTagPresent(secondary_addr) == false); // transient states dont apply
+          if (data.cacheAvail(secondary_addr, block_size_in_bytes)) {
+            DPRINTF(RubySlicc, "unpair ok we have data space\n");
+            trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+          } else {
+            DPRINTF(RubyReplacement, "[data repl] Addr: %#x State: %s Req: %s Type: %s Dest: %s Event: %s, is_sec: %d, has_sec: %d\n",
+              in_msg.addr, getState(tbe, cache_entry, in_msg.addr),
+              in_msg.Requestor, in_msg.Type, in_msg.Destination,
+              toTrigger, is_secondary, has_secondary);
+            // No room in the L2 data, so we need to make room before handling the request
+            Addr victim := data_array_select_victim(in_msg.addr);
+            Event toTrigger := data_array_replacement(victim);
+            Entry L2cache_entry := getCacheEntry(victim);
+            trigger(toTrigger, victim, L2cache_entry, TBEs[victim]);
+          }
+        } else if (toTrigger == Event:L1_PUTX && getState(tbe, cache_entry, in_msg.addr) == State:MT) {
+          assert(false);
+        } else {
+          trigger(toTrigger, in_msg.addr, cache_entry, tbe);
+        }
+
+      } else {
+        error("unknown XOR state\n");
+      }
+      
+    }
+  }
+}
+

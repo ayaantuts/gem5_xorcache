@@ -54,6 +54,7 @@ python_class_map = {
     "CacheMemory": "RubyCache",
     "CacheMemoryDualAddr": "RubyCacheDualAddr",
     "CacheMemoryProbe": "RubyCacheProbe",
+    "CacheMemoryCounter": "RubyCacheCounter",
     "CacheMemoryFASector": "RubyCacheFASector",
     "CacheMemoryRegionSector": "RubyCacheRegionSector",
     "CacheMemorySASector": "RubyCacheSASector",

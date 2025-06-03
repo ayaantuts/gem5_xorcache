@@ -24,12 +24,19 @@ class DataProc : public SimObject
     void init();
     void print(std::ostream& out) const;
 
+    // =========== Computing Thesaurus LSH fingerprint as address ===========
+    Addr compute_thesaurus_lsh_fingerprint(DataBlock blk, int fingerprint_bits, int m_block_size) const;
+    
     // =========== Compression ===========
     int compress(DataBlock blk);
     int compress(DataBlock blk, DataBlock ref);
     int peek_compress(DataBlock blk);
     int peek_compress(DataBlock blk, DataBlock ref);
     int peek_compress_intra_bdi(DataBlock blk);
+    int peek_compress_intra_bitplane(DataBlock blk);
+    int bitplane_base_orig_encoder(u_int32_t base);
+    int bitplane_bp_encoder(u_int16_t * DBX, u_int16_t * DBP, int num_DBP);
+    unsigned countSetBits(const u_int8_t* data, const int data_size);
     int peek_compress_intra(DataBlock blk);
     int peek_compress_inter(DataBlock blk, DataBlock ref=DataBlock());
     Cycles decompress();

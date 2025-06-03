@@ -132,13 +132,13 @@ AssociativeMapTable::willReplacementHappen(Addr addr, DataBlock blk) {
     std::queue<Addr> temp_queue_tag;
 
     // ***** print m_map_table_tag[set], it should not change *****
-    DPRINTF(RubyAssociativeMapTable, "willReplacementHappen before: set %d, map_index %d\n", set, map_index);
-    for (int i = 0; i < m_map_table_tag[set].size(); i++) {
-        Addr tag = m_map_table_tag[set].front();
-        m_map_table_tag[set].pop();
-        m_map_table_tag[set].push(tag);
-        DPRINTF(RubyAssociativeMapTable, "willReplacementHappen before: tag %d\n", tag);
-    }
+    // DPRINTF(RubyAssociativeMapTable, "willReplacementHappen before: set %d, map_index %d\n", set, map_index);
+    // for (int i = 0; i < m_map_table_tag[set].size(); i++) {
+    //     Addr tag = m_map_table_tag[set].front();
+    //     m_map_table_tag[set].pop();
+    //     m_map_table_tag[set].push(tag);
+    //     DPRINTF(RubyAssociativeMapTable, "willReplacementHappen before: tag %d\n", tag);
+    // }
 
     while (!m_map_table_tag[set].empty()) {
         Addr tag = m_map_table_tag[set].front();
@@ -197,13 +197,13 @@ AssociativeMapTable::insertion_probe(Addr addr, DataBlock blk) {
     std::queue<Addr> temp_queue_tag;
 
     // ***** print m_map_table_tag[set], it should not change *****
-    DPRINTF(RubyAssociativeMapTable, "insertion_probe before: set %d, map_index %d\n", set, map_index);
-    for (int i = 0; i < m_map_table_tag[set].size(); i++) {
-        Addr tag = m_map_table_tag[set].front();
-        m_map_table_tag[set].pop();
-        m_map_table_tag[set].push(tag);
-        DPRINTF(RubyAssociativeMapTable, "insertion_probe before: tag %d\n", tag);
-    }
+    // DPRINTF(RubyAssociativeMapTable, "insertion_probe before: set %d, map_index %d\n", set, map_index);
+    // for (int i = 0; i < m_map_table_tag[set].size(); i++) {
+    //     Addr tag = m_map_table_tag[set].front();
+    //     m_map_table_tag[set].pop();
+    //     m_map_table_tag[set].push(tag);
+    //     DPRINTF(RubyAssociativeMapTable, "insertion_probe before: tag %d\n", tag);
+    // }
 
     while (!m_map_table_tag[set].empty()) {
         Addr tag = m_map_table_tag[set].front();

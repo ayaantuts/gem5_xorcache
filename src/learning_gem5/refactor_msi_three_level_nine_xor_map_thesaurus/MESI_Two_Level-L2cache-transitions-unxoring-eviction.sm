@@ -1,0 +1,1571 @@
+  //  ==== replace ====
+
+  // ss_ss
+  transition(SS_SS, L2_Replacement_clean, I_I_s) { 
+    i_allocateTBE;
+    buf_secondary;
+
+    ddt_deallocateTag; // primary
+    dddir_deallocateDir; // primary
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    entropyXOR_rm_xor_data;
+
+    expand_data1; //overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    // secondary block data needs to be recovered => L2ONLY_s
+    // primary block gone => I_I_s
+    l2a2_allocateL2_preservingPhy; // removed xored block from entropy calculation
+    l2set2_sss;
+
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SS, L2_Replacement_clean2, I_I_s) { 
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    buf_primary; // since unpairing now
+
+    ddt_deallocateTag; // secondary
+    dddir_deallocateDir; // secondary
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    entropyXOR_rm_xor_data;
+
+    // primary block data needs to be recovered => L2ONLY_s
+    // secondary block gone => I_I_s
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+    l2set1_sss;
+    expand_data1; //overprovision
+
+    usc;
+    xor_unpair;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+
+  transition(SS_SS, {L2_Replacement, MEM_Inv}, SI_SS_r1) {
+    i_allocateTBE;
+
+    ddt_deallocateTag;
+    dddir_deallocateDir;
+    
+    entropy_rm_xor_data;
+
+    expand_data1; //overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SI_SS_r1, Ack_Data, S_I) { 
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    update_data2;
+    entropy_reg_secondary_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    qq_writeDataToTBE;
+
+    aaststs2_allocateSingularTagBoth_secondary;
+    dmt_insert_fromCache2;
+    dmtS_insert_fromCache2;
+
+    l2a2_allocateL2;
+    l2set2_ss;
+    ooo_run_xor2;
+
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock;
+
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  transition(SI_SS_r1, Ack_Data_all, M_I) { 
+    entropyXOR_rm_xor_data;
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    update_data2;
+    entropy_reg_secondary_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    qq_writeDataToTBE;
+    ct_exclusiveReplacementFromTBE;
+
+    aaststs2_allocateSingularTagBoth_secondary;
+    dmt_insert_fromCache2;
+    dmtS_insert_fromCache2;
+
+    l2a2_allocateL2;
+    l2set2_ss;
+    ooo_run_xor2;
+
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock;
+
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+
+  transition(SS_SS, {L2_Replacement2, MEM_Inv2}, SS_SI_r2) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+
+    ddt_deallocateTag;
+    dddir_deallocateDir;
+
+    entropy_rm_xor_data;
+
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+
+    expand_data1; //overprovision
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_SI_r2, Ack_Data2, S_I) { 
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    qq_writeDataToTBE;
+    update_data1;
+    entropy_reg_primary_data; // add primary toward entropy calculation
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    aaststs1_allocateSingularTagBoth_primary;
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+    l2set1_ss;
+    ooo_run_xor1;
+
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+    usc;
+
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  transition(SS_SI_r2, Ack_Data_all2, M_I) { 
+    entropyXOR_rm_xor_data;
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    qq_writeDataToTBE;
+    update_data1;
+    entropy_reg_primary_data; // add primary toward entropy calculation
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    ct_exclusiveReplacementFromTBE;
+
+    aaststs1_allocateSingularTagBoth_primary;
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+    l2set1_ss;
+    ooo_run_xor1;
+
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+    usc;
+
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+  
+
+  // ss_l2only
+  transition(SS_L2ONLY, L2_Replacement_clean, I_I_s) {
+    entropyXOR_rm_xor_data;
+    i_allocateTBE;
+    buf_secondary;
+
+    ddt_deallocateTag; // primary
+    dddir_deallocateDir; // primary
+
+    entropy_rm_xor_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    expand_data1; //overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    // secondary block data needs to be recovered => L2ONLY_s
+    // primary block gone => I_I_s
+    l2a2_allocateL2_preservingPhy;
+    l2set2_l2onlys;
+
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY, L2_Replacement_clean2, M_I) { 
+    entropyXOR_rm_xor_data;
+    //recover data in secondary block, send recover to primary block
+    // secondary
+    i2_allocateTBE;
+    set_secondary_as_tbe; // will implicitly transition to M_I
+    c_exclusiveCleanReplacement;
+
+    ddt2_deallocateTag;
+    ddtns2_deallocateTagNS;
+
+    entropy_rm_xor_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    expand_data1; //overprovision
+
+    // primary
+    drf1_sendRecoverToSharerUsingFwdNetwork;
+
+    l2set1_sss;
+
+    usc;
+    xor_unpair;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(SS_L2ONLY, {L2_Replacement, MEM_Inv}, SI_L2ONLY_r1) {
+    i_allocateTBE;
+
+    ddt_deallocateTag;
+    dddir_deallocateDir;
+    
+    expand_data1; //overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SI_L2ONLY_r1, Ack_Data, S_I) { //secondary should have enough space
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    update_data2;
+    entropy_reg_secondary_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    qq_writeDataToTBE;
+
+    aast2_allocateSingularTag_secondary;
+    aadns2_allocateDataNS;
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+
+    l2a2_allocateL2;
+    l2set2_l2only;
+    ooo_run_xor2;
+
+
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_L2ONLY_r1, Ack_Data_all, M_I) { // secondary should have enough space
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    update_data2;
+    entropy_reg_secondary_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    qq_writeDataToTBE;
+    ct_exclusiveReplacementFromTBE;
+
+    aast2_allocateSingularTag_secondary;
+    aadns2_allocateDataNS;
+    dmt_insert_fromCache2;
+    dmtNS_insert_fromCache2;
+
+    l2a2_allocateL2;
+    l2set2_l2only;
+    ooo_run_xor2;
+
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  
+  transition(SS_L2ONLY, {L2_Replacement2, MEM_Inv2}, SS_L2ONLY_r2) { 
+    //recover data in secondary block, send recover to primary block to the newest sharer
+    i1_allocateTBE;
+    set_primary_as_tbe;
+
+    ddt2_deallocateTag;
+    ddtns2_deallocateTagNS;
+
+    expand_data1; //overprovision
+    
+
+    // primary
+    drf1_sendRecoverToSharerUsingFwdNetwork;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SS_L2ONLY_r2, Recover_Data, SS) { //primary should have enough space
+    entropyXOR_rm_xor_data;
+    // data for primary block now comes back
+    s_deallocateTBE;
+    aaststs1_allocateSingularTagBoth_primary;
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+
+    // secondary block recover and send to mem
+    ml1_writeLogicalDataToCache;
+
+    entropy_rm_xor_data;
+    mp_writePhyDataToCache_compress_update2;
+
+    update_data1;
+    entropy_reg_primary_data;
+    
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    i2_allocateTBE;
+    c2_exclusiveReplacement;// send to memory
+
+    l2set2_mi;
+
+    ooo_run_xor1;
+
+    // deallocate secondary block
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  // l2only_ss
+  transition(L2ONLY_SS, L2_Replacement_clean, M_I) { 
+    entropyXOR_rm_xor_data;
+    //recover data in primary block, send recover to secondary block
+    // primary
+    i1_allocateTBE;
+    set_primary_as_tbe; // will implicitly transition to M_I
+    c_exclusiveCleanReplacement;
+
+    ddt1_deallocateTag;
+    ddtns1_deallocateTagNS;
+
+    expand_data1; //overprovision
+    change_data_addr_from_primary_to_secondary;
+
+    entropy_rm_xor_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    // secondary
+    drf2_sendRecoverToSharer2UsingFwdNetwork;
+
+    // split l2cache into two (primary is deallocated due to repl)
+    l2a2_allocateL2_preservingPhy; // removed xored block from entropy calculation
+    l2set2_sss;
+    xor_unpair;
+    ddl2_deallocateL2CacheBlock;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS, L2_Replacement_clean2, I_I_s) {
+    entropyXOR_rm_xor_data;
+    i2_allocateTBE;
+    set_secondary_as_tbe; // will implicitly transition to I_I_s
+    buf_primary;
+
+    ddt_deallocateTag; // secondary
+    dddir_deallocateDir; // secondary
+
+    entropy_rm_xor_data;
+    
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    // primary block data needs to be recovered => L2ONLY_s
+    // secondary block gone => I_I_s
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+
+    l2set1_l2onlys;
+    expand_data1; //overprovision
+
+    usc;
+    xor_unpair;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(L2ONLY_SS, {L2_Replacement, MEM_Inv}, L2ONLY_SS_r1) { 
+    // nothing changes entropy
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+
+    ddt1_deallocateTag;
+    ddtns1_deallocateTagNS;
+
+    expand_data1; //overprovision
+    change_data_addr_from_primary_to_secondary; // without touching repl data, size
+    
+    drf2_sendRecoverToSharer2UsingFwdNetwork;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SS_r1, Recover_Data2, SS) {  //secondary should have enough space
+    entropyXOR_rm_xor_data;
+    // data for secondary block now comes back
+    s_deallocateTBE;
+    aaststs2_allocateSingularTagBoth_secondary;
+    dmt_insert_fromCache2;
+    dmtS_insert_fromCache2;
+
+    // primary block recover and send to mem
+    ml2_writeLogicalDataToCache;
+
+    entropy_rm_xor_data;
+    
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    update_data2;
+    entropy_reg_secondary_data;
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    i1_allocateTBE;
+    c1_exclusiveReplacement;// send to memory
+    l2set1_mi;
+
+    l2a2_allocateL2;
+    // usc;
+    ddl21_deallocateL2CacheBlock;
+    set_secondary_as_cache_entry;
+
+    ooo_run_xor2;
+
+    o_popIncomingResponseQueue;
+    kd2_wakeUpDependents;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  transition(L2ONLY_SS, {L2_Replacement2, MEM_Inv2}, L2ONLY_SI_r2) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+
+    ddt_deallocateTag;
+    dddir_deallocateDir;
+
+    expand_data1; //overprovision
+
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SI_r2, Ack_Data2, S_I) { // primary should have enough space
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    qq_writeDataToTBE;
+
+    update_data1;
+    entropy_reg_primary_data;
+
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+
+    aast1_allocateSingularTag_primary;
+    aadns1_allocateDataNS;
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+
+    l2set1_l2only;
+    ooo_run_xor1;
+
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+    usc;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(L2ONLY_SI_r2, Ack_Data_all2, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    update_data1;
+    entropy_reg_primary_data;
+
+
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    qq_writeDataToTBE;
+    ct_exclusiveReplacementFromTBE;
+
+    aast1_allocateSingularTag_primary;
+    aadns1_allocateDataNS;
+    dmt_insert_fromCache1;
+    dmtNS_insert_fromCache1;
+
+    l2set1_l2only;
+    ooo_run_xor1;
+
+    o_popIncomingResponseQueue;
+    kd1_wakeUpDependents;
+    xor_unpair;
+    usc;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+
+
+// update ack
+  transition({SI_L2ONLY_r1, SI_SS_r1, I_I_sm, I_I_s}, Ack) { 
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    uur_profileDirRead;
+  }
+  transition({SS_SI_r2, L2ONLY_SI_r2}, Ack2) { 
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    uur_profileDirRead;
+  }
+
+  transition(I_I_s, Ack_Data, I_I_sm) {
+    q_updateAck;
+
+    mpxp_processWritePhyDataToPairedCache;
+    update_data_paired;
+    entropy_reg_paired_data;
+
+    o_popIncomingResponseQueue;
+
+    uur_profileDataRead;
+  }
+  transition(I_I_sm, Ack_all, M_I) {//TODO:
+    l2_setPairedStateBack;
+
+    aastp_allocateSingularTag_paired;
+    dmt_insert_fromCache_paried;
+    c_exclusiveCleanReplacement;
+    o_popIncomingResponseQueue;
+    kdp_wakeUpDependents;
+
+    uur_profileDMTRead;
+  }
+  transition(I_I_s, Ack_Data_all, M_I) {//TODO:
+    // recover data in secondary block and 
+    // set secondary block to L2ONLY/SS
+    mpxp_processWritePhyDataToPairedCache;
+    update_data_paired;
+    entropy_reg_paired_data;
+
+    l2_setPairedStateBack;
+
+    aastp_allocateSingularTag_paired;
+    dmt_insert_fromCache_paried;
+    c_exclusiveCleanReplacement;
+    o_popIncomingResponseQueue;
+    kdp_wakeUpDependents;
+
+    uur_profileDataRead;
+    uur_profileDMTRead;
+  }
+
+  transition(SS_s, Recover_Data, SS) {  //primary should have enough space
+    aast_allocateSingularTag;
+    aasts_allocateSingularTagShared;
+
+    dmt_insert_fromCache1;
+    dmtS_insert_fromCache1;
+
+    m_writeDataToCache_noCheck; // adding input data toward entropy calculation
+    entropy_reg_data;
+
+    ooo_run_xor1;
+
+    o_popIncomingResponseQueue;
+    kd_wakeUpDependents;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  
+
+  //  ==== replace data ====
+  transition({L2ONLY_SI_dd, L2ONLY_II_dc, SI_SI_dd, SI_II_dc, II_SI_cd}, Ack2) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  transition({S_I_s, SI_L2ONLY_dd, II_L2ONLY_cd, SI_L2ONLY_dc, SI_SI_dd, II_SI_cd, SI_II_dc, SI_MI_dd, SI_MI_dc, II_MI_cd}, Ack) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+
+  // l2only_ss
+  transition(L2ONLY_SS, L2_Replacement_data_clean_clean, M_I) {
+    entropyXOR_rm_xor_data;
+    i_allocateTBE;
+    // l2set1_mi; //implicit
+    i2_allocateTBE;
+    l2set2_ii;
+    c_exclusiveCleanReplacement;
+    f2_sendInvToSharers;
+
+    ddt2_deallocateTag;
+    dddir2_deallocateDir;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    xor_unpair;
+    ddtns_deallocateTagNS;
+
+    rt_deallocateL2CacheBlockwithTagData;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(L2ONLY_SS, L2_Replacement_data_dirty_dirty, L2ONLY_SI_dd) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+
+    ddt1_deallocateTag;
+    ddd1_deallocateData;
+    ddtns1_deallocateTagNS;
+    ddt2_deallocateTag;
+    dddir2_deallocateDir;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_SI_dd, Ack_Data2, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+    qq_writeDataToTBE;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    c1_exclusiveReplacement;// send to memory
+    i1_allocateTBE;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+    l2set1_mi;
+
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(L2ONLY_SI_dd, Ack_Data_all2, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    c1_exclusiveReplacement;// send to memory
+    c2_exclusiveReplacement;// send to memory
+    i1_allocateTBE;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+    l2set1_mi;
+
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  transition(L2ONLY_SS, L2_Replacement_data_dirty_clean, L2ONLY_II_dc) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+
+    ddt1_deallocateTag;
+    ddd1_deallocateData;
+    ddtns1_deallocateTagNS;
+    ddt2_deallocateTag;
+    dddir2_deallocateDir;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(L2ONLY_II_dc, Ack_Data2, I_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c1_exclusiveReplacement;// send to memory
+    i1_allocateTBE;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+    l2set1_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(L2ONLY_II_dc, Ack_Data_all2, M_I) {
+    entropyXOR_rm_xor_data;
+    // primary block recover and send to mem
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c1_exclusiveReplacement;// send to memory
+    i1_allocateTBE;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+    l2set1_mi;
+
+    c_exclusiveCleanReplacement;// send to memory
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  transition(L2ONLY_SS, L2_Replacement_data_clean_dirty, M_I) {
+    entropyXOR_rm_xor_data;
+    i_allocateTBE;
+    // l2set1_mi; //implicit
+    i2_allocateTBE;
+    l2set2_sis;
+    c_exclusiveCleanReplacement;
+    
+    fsn2_sendInvSpecialToSharers_newest;
+    fr2_sendInvToSharers_rest;
+
+
+    ddt2_deallocateTag;
+    dddir2_deallocateDir;
+
+    ddtns_deallocateTagNS;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    xor_unpair;
+
+    rt_deallocateL2CacheBlockwithTagData;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(S_I_s, Ack_Data, S_I) {
+    q_updateAck;
+    qq_writeDataToTBE;
+    o_popIncomingResponseQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(S_I_s, Ack_Data_all, M_I) {
+    ct_exclusiveReplacementFromTBE;// send to memory
+    o_popIncomingResponseQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+
+  // ss_l2only
+  transition(SS_L2ONLY, L2_Replacement_data_dirty_dirty, SI_L2ONLY_dd) {
+    i1_allocateTBE;
+    set_primary_as_tbe;
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+
+    ddt1_deallocateTag;
+    ddd1_deallocateData;
+    dddir_deallocateDir;
+    ddtns2_deallocateTagNS;
+    ddt2_deallocateTag;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SI_L2ONLY_dd, Ack_Data, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    qq_writeDataToTBE;
+    c2_exclusiveReplacement;// send to memory
+    i2_allocateTBE;
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_L2ONLY_dd, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    // primary block recover and send to mem
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c_exclusiveReplacement;// send to memory
+    c2_exclusiveReplacement;// send to memory
+    i2_allocateTBE;
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  transition(SS_L2ONLY, L2_Replacement_data_clean_clean, I_I) {
+    entropyXOR_rm_xor_data;
+    i_allocateTBE;
+    // l2set1_ii; //implicit
+    i2_allocateTBE;
+    l2set2_mi;
+
+    c2_exclusiveCleanReplacement;
+    f_sendInvToSharers;
+
+    ddt2_deallocateTag;
+    dddir_deallocateDir;
+    ddtns2_deallocateTagNS;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    xor_unpair;
+
+    rt_deallocateL2CacheBlockwithTagData;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(SS_L2ONLY, L2_Replacement_data_clean_dirty, II_L2ONLY_cd) {
+    i_allocateTBE;
+    set_primary_as_tbe;
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+
+    dddir_deallocateDir;
+    ddtns2_deallocateTagNS;
+    ddt1_deallocateTag;
+    ddd1_deallocateData;
+    ddt2_deallocateTag;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(II_L2ONLY_cd, Ack_Data, I_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c2_exclusiveReplacement;// send to memory
+    i2_allocateTBE;
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(II_L2ONLY_cd, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    // primary block recover and send to mem
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c_exclusiveCleanReplacement;// send to memory
+    c2_exclusiveReplacement;// send to memory
+    i2_allocateTBE;
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+  transition(SS_L2ONLY, L2_Replacement_data_dirty_clean, SI_L2ONLY_dc) {
+    i1_allocateTBE;
+    set_primary_as_tbe;
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+
+    ddt1_deallocateTag;
+    ddd1_deallocateData;
+    dddir_deallocateDir;
+    ddtns2_deallocateTagNS;
+    ddt2_deallocateTag;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SI_L2ONLY_dc, Ack_Data, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    qq_writeDataToTBE;
+    c2_exclusiveCleanReplacement;// send to memory
+    i2_allocateTBE;
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_L2ONLY_dc, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    c_exclusiveReplacement;// send to memory
+    c2_exclusiveCleanReplacement;// send to memory
+    i2_allocateTBE;
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    // kd1_wakeUpDependents;
+    // kd2_wakeUpDependents;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+
+
+  // ss_ss
+  transition(SS_SS, L2_Replacement_data_clean_clean, I_I) {
+    entropyXOR_rm_xor_data;
+    i_allocateTBE;
+    // l2set1_ii; //implicit
+    i2_allocateTBE;
+    l2set2_ii;
+
+    f_sendInvToSharers;
+    f2_sendInvToSharers;
+
+    dddir_deallocateDir;
+    dddir2_deallocateDir;
+    ddt2_deallocateTag;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    xor_unpair;
+
+    rt_deallocateL2CacheBlockwithTagData;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(SS_SS, L2_Replacement_data_dirty_dirty, SI_SI_dd) {
+    i1_allocateTBE;
+    i2_allocateTBE;
+    set_primary_as_tbe;
+    l2set2_sisidd;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    f2_sendInvToSharers;
+
+    dddir_deallocateDir;
+    ddt_deallocateTag;
+    
+    ddd_deallocateData;
+    dddir2_deallocateDir;
+    ddt2_deallocateTag;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SI_SI_dd, Ack_all2, SI_MI_dd) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    l2set1_simidd;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  transition(SI_SI_dd, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    // mp1_processWriteDataToCache;
+
+    c_exclusiveReplacement;// primary
+
+    set_primary_as_tbe;
+    l2set2_si;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_SI_dd, Ack_Data, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    // mp1_processWriteDataToCache;
+
+    qq_writeDataToTBE; //primary
+
+    set_primary_as_tbe;
+    l2set2_si;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_MI_dd, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    c_exclusiveReplacement;// send to memory
+    c2_exclusiveReplacement;// send to memory
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_MI_dd, Ack_Data, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    qq_writeDataToTBE;
+    c2_exclusiveReplacement;// send to memory
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  
+
+  transition(SS_SS, L2_Replacement_data_dirty_clean, SI_II_dc) {
+    i1_allocateTBE;
+    i2_allocateTBE;
+    set_primary_as_tbe;
+    l2set2_siiidc;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    f2_sendInvToSharers;
+
+    dddir_deallocateDir;
+    ddt_deallocateTag;
+
+    ddd_deallocateData;
+    dddir2_deallocateDir;
+    ddt2_deallocateTag;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(SI_II_dc, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c_exclusiveReplacement;// primary
+
+    set_secondary_as_tbe;
+    qq_writeDataToTBE; //secondary
+    set_primary_as_tbe;
+    l2set2_ii;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_II_dc, Ack_Data, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    qq_writeDataToTBE; //primary
+
+    set_secondary_as_tbe;
+    qq_writeDataToTBE; //secondary
+    set_primary_as_tbe;
+    l2set2_ii;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_II_dc, Ack_all2, SI_MI_dc) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    l2set1_simidc;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_MI_dc, Ack_Data, S_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    qq_writeDataToTBE;
+    c2_exclusiveCleanReplacement;// send to memory
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(SI_MI_dc, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    // primary block recover and send to mem
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c_exclusiveReplacement;// send to memory
+    c2_exclusiveCleanReplacement;// send to memory
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  
+  transition(SS_SS, L2_Replacement_data_clean_dirty, II_SI_cd) {
+    i1_allocateTBE;
+    i2_allocateTBE;
+    set_primary_as_tbe;
+    l2set2_iisicd;
+
+    fsn1_sendInvSpecialToSharers_newest;
+    fr1_sendInvToSharers_rest;
+    f2_sendInvToSharers;
+
+    dddir_deallocateDir;
+    ddt_deallocateTag;
+
+    ddd_deallocateData;
+    dddir2_deallocateDir;
+    ddt2_deallocateTag;
+    
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  transition(II_SI_cd, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    c_exclusiveCleanReplacement;// primary
+
+    // set_secondary_as_tbe;
+    // qq_writeDataToTBE; //secondary
+    set_primary_as_tbe;
+    l2set2_si;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(II_SI_cd, Ack_Data, I_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // c_exclusiveCleanReplacement;// primary
+
+    // set_secondary_as_tbe;
+    // qq_writeDataToTBE; //secondary
+    set_primary_as_tbe;
+    l2set2_si;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  transition(II_SI_cd, Ack_all2, II_MI_cd) {
+    q_updateAck;
+    o_popIncomingResponseQueue;
+    l2set1_iimicd;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+  }
+  transition(II_MI_cd, Ack_Data, I_I) {
+    entropyXOR_rm_xor_data;
+    q_updateAck;
+
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    // c_exclusiveCleanReplacement;// send to memory
+    c2_exclusiveReplacement;// send to memory
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+
+  }
+  transition(II_MI_cd, Ack_Data_all, M_I) {
+    entropyXOR_rm_xor_data;
+    entropy_rm_xor_data;
+    entropyRaw_rm_secondary_data;
+    entropyRaw_rm_primary_data;
+
+
+    mpx_writePhyDataToCache_XOR_noUpdate;
+
+    // primary block recover and send to mem
+    c_exclusiveCleanReplacement;// send to memory
+    c2_exclusiveReplacement;// send to memory
+    l2set2_mi;
+
+    o_popIncomingResponseQueue;
+    xor_unpair;
+    ddl21_deallocateL2CacheBlock; // deallocate primary L2
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDataRead;
+  }
+  

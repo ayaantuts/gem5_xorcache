@@ -63,6 +63,7 @@ parser.add_argument(
              "msi_nine_xor_nobdi_map3", "msi_nine_noxor_nobdi_map3",
 
              "msi_nine_noxor_thesaurus_map",
+             "msi_exc3",
              ],
     required=True,
 )
@@ -125,6 +126,9 @@ elif args.protocol == "msi_nine":
 elif args.protocol == "msi_exc":
     from test_caches_msi_exc import TestCacheSystem_msi_exc as TestCacheSystem_msi_exc
     system.caches = TestCacheSystem_msi_exc()
+elif args.protocol == "msi_exc3":
+    from test_caches_msi_exc3 import TestCacheSystem_msi_exc3 as TestCacheSystem_msi_exc3
+    system.caches = TestCacheSystem_msi_exc3()
 elif args.protocol == "msi_nine_xor":
     from test_caches_msi_nine_xor import TestCacheSystem_msi_nine_xor as TestCacheSystem_msi_nine_xor
     system.caches = TestCacheSystem_msi_nine_xor()

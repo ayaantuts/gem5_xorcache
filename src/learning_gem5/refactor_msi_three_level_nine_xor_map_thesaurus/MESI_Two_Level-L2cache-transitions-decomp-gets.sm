@@ -1,0 +1,216 @@
+// %%%%%%%%%%%%%%%%%%%%%% internal %%%%%%%%%%%%%%%%%%%%%%
+
+// ==== GETS ====
+  // ss_ss
+  transition(SS_SS, {L1_GETS2_pb, L1_GET_INSTR2_pb}, SS_SS_UB2) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+
+    ds2pb1_sendSharedData2ToRequestor_piggyback1; //centroid 
+    
+    // nns_addSecondarySharer;
+
+    set_tagMRU;
+    set1_tagMRU;
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDataRead;
+  }
+  transition(SS_SS, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}, SS_SS_UB2) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    bf2_forwardRequestToSharer;
+
+    // nns_addSecondarySharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(SS_SS, {L1_GETS_pb, L1_GET_INSTR_pb}, SS_SS_UB1) {
+    i1_allocateTBE;
+    set_primary_as_tbe;
+    ipu_incrementPendingUBs;
+
+    ds1pb2_sendSharedDataToRequestor_piggyback2;  //centroid 
+
+    // nn_addSharer;
+
+    set_tagMRU;
+    set_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDataRead;
+  }
+  transition(SS_SS, {L1_GETS_fwd, L1_GET_INSTR_fwd}, SS_SS_UB1) {
+    i_allocateTBE;
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    bf1_forwardRequestToSharer;
+
+    // nn_addSharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+
+  // l2only_ss
+  transition(L2ONLY_SS, {L1_GETS2_fwd, L1_GET_INSTR2_fwd}, L2ONLY_SS_UB2) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    bf2_forwardRequestToSharer;
+
+    // nns_addSecondarySharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+
+  transition(L2ONLY_SS, {L1_GETS_pb, L1_GET_INSTR_pb}, SS_SS_UB1) { 
+    // nothing changes entropy
+    i1_allocateTBE;
+    set_primary_as_tbe;
+    ipu_incrementPendingUBs;
+
+    ds1pb2_sendSharedDataToRequestor_piggyback2;  //centroid 
+
+    aadir_allocateDir;
+    ddtns_deallocateTagNS;
+    // nn_addSharer;
+
+    set_tagMRU;
+    set1_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDataRead;
+  }
+  transition(L2ONLY_SS, {L1_GETS_recon, L1_GET_INSTR_recon}, SS_SS_UB1) {
+    i1_allocateTBE;
+    set_primary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb2_recordBlockedSharer;
+    srs2_sendReconstructSToSharer2; //centroid 
+    // nn_addSharer;
+    
+    aadir_allocateDir;
+    ddtns_deallocateTagNS;
+
+    set_tagMRU;
+    set_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDataRead;
+  }
+  
+  // ss_l2only
+  transition(SS_L2ONLY, {L1_GETS_fwd, L1_GET_INSTR_fwd}, SS_L2ONLY_UB1) {
+    i_allocateTBE;
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    bf1_forwardRequestToSharer;
+    // nn_addSharer;
+
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+  }
+  
+  transition(SS_L2ONLY, {L1_GET_INSTR2_recon, L1_GETS2_recon}, SS_SS_UB2) {
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+    bb1_recordBlockedSharer;
+    srs1_sendReconstructSToSharer; //centroid 
+    // nns_addSecondarySharer;
+
+    aadir_allocateDir;
+    ddtns_deallocateTagNS;
+
+    set_tagMRU;
+    set_dataMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDataRead;
+  }
+  transition(SS_L2ONLY, {L1_GETS2_pb, L1_GET_INSTR2_pb}, SS_SS_UB2) { 
+    // nothing changes entropy
+
+    i2_allocateTBE;
+    set_secondary_as_tbe;
+    ipu_incrementPendingUBs;
+
+    ds2pb1_sendSharedData2ToRequestor_piggyback1;  //centroid 
+
+    aadir2_allocateDir;
+    ddtns2_deallocateTagNS;
+    // nns_addSecondarySharer;
+
+    set_tagMRU;
+    set1_dataMRU;
+    set_dirMRU;
+
+    uu_profileHit;
+    jj_popL1RequestQueue;
+
+    uur_profileDirRead;
+    uur_profileTagRead;
+    uur_profileDirRead;
+    uur_profileDataRead;
+  }
+

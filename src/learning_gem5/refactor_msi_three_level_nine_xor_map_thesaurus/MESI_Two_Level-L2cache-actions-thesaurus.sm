@@ -1,0 +1,318 @@
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% compressing (data-in) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+// mn_writeBrandNewDataToCache alternative: this action is used on Mem_Data and Mem_Data_lifted events
+action(find_centroid_compress_write_memdata, "ctr_findcomp_mem", desc="find centroid on compressing using response msg data blk and update mem and cache") {
+    peek(responseL2Network_in, ResponseMsg) {
+        assert(is_valid(cache_entry));
+        // compute thesaurus lsh value
+        Addr thesaurus_lsh := dataProc.compute_thesaurus_lsh_fingerprint(in_msg.DataBlk, thesaurus_fingerprint_bits, block_size_in_bytes);
+        bool centroid_cache_hit := centroidCache.isTagPresent(thesaurus_lsh);
+        bool centroid_memory_hit := centroidMemory.isTagPresent(thesaurus_lsh);
+        centroidCache.profileRead();
+        if (!centroid_memory_hit) { // memory has not seen this lsh yet, add it 
+            DPRINTF(RubyThesaurus, "centroid memory insert thesaurus_lsh=%#x\n", thesaurus_lsh);
+            assert(centroidMemory.cacheAvail(thesaurus_lsh));
+            centroidMemory.allocate(thesaurus_lsh, new Entry);
+            static_cast(Entry, "pointer", centroidMemory[thesaurus_lsh]).DataBlk := in_msg.DataBlk;
+            centroidMemory.profileRead();
+        } else {
+            centroidMemory.incrementCounter(thesaurus_lsh); // one more line added to the cluster
+        }
+
+        if (!centroid_cache_hit) { // no penalty on cache miss because we have the centroid right now so no need to look elsewhere
+            if (centroidCache.cacheAvail(thesaurus_lsh)) { // cache miss but has space => insert it
+                centroidCache.allocate(thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x\n", thesaurus_lsh);
+            } else {
+                Addr victim_lsh := centroidCache.cacheProbe(thesaurus_lsh);
+                assert(victim_lsh != thesaurus_lsh);
+                centroidCache.deallocate(victim_lsh); // evict the victim and insert it
+                centroidCache.allocate(thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x, evicted %#x\n", thesaurus_lsh, victim_lsh);
+            }
+        } else {
+            centroidCache.setMRU(thesaurus_lsh);
+        }
+
+        DataBlock centroid_data_blk := static_cast(Entry, "pointer", centroidMemory[thesaurus_lsh]).DataBlk;
+        cache_entry.DataBlk := in_msg.DataBlk;
+        cache_entry.DataBlk_phy := in_msg.DataBlk;
+        if (in_msg.Dirty) {
+            cache_entry.Dirty := in_msg.Dirty;
+        }
+        DPRINTF(RubySlicc, "cache_entry.DataBlk: %s\n", cache_entry.DataBlk);
+        DPRINTF(RubySlicc, "cache_entry.DataBlk_phy: %s\n", cache_entry.DataBlk_phy);
+        DPRINTF(RubySlicc, "cache_entry.Dirty: %s\n", cache_entry.Dirty);
+
+        int comp_data_size_in_byte := dataProc.compress(in_msg.DataBlk, centroid_data_blk);
+        DPRINTF(RubySlicc, "compressed size %d\n", comp_data_size_in_byte);
+        Addr primary_addr := L2cache.getPrimaryAddr(address);
+
+        int orig := data.getDataSize(primary_addr);
+        assert(orig == block_size_in_bytes);
+        APPEND_TRANSITION_COMMENT(" origi:");
+        APPEND_TRANSITION_COMMENT(orig);
+
+        DPRINTF(RubyDataUpdate, "primary 0x%llx %d -> %d\n", primary_addr, orig, comp_data_size_in_byte);
+        data.updateDataSize(primary_addr, comp_data_size_in_byte);
+        DPRINTF(RubySlicc, "5.update data size for addr 0x%llx\n", primary_addr);
+
+        APPEND_TRANSITION_COMMENT(" new:");
+        APPEND_TRANSITION_COMMENT(data.getDataSize(primary_addr));
+        DPRINTF(RubyDataEntropy, "Insertion %llx:%s\n", primary_addr, cache_entry.DataBlk);
+    }
+}
+// mpx_writePhyDataToCache_XOR_compress_update alternative: this action is used on Mem_Data2 events
+action(find_centroid_compress_write_memdata_xor, "ctr_findcomp_memx", desc="process and write physical data from response queue to cache") {
+    peek(responseL2Network_in, ResponseMsg) {
+        
+        assert(is_valid(cache_entry));
+        Addr primary_addr := L2cache.getPrimaryAddr(address);
+        DPRINTF(RubySlicc, "1.cache_entry.DataBlk_phy before xor: %s\n", cache_entry.DataBlk_phy);
+
+        DPRINTF(RubySlicc, "2.xorer: %s\n", in_msg.DataBlk);
+        DataBlock newData := dataProc.preprocess(cache_entry.DataBlk_phy, in_msg.DataBlk);
+
+        cache_entry.DataBlk_phy := newData;
+        DPRINTF(RubySlicc, "3.cache_entry.DataBlk_phy after xor: %s\n", cache_entry.DataBlk_phy);
+
+        ////////// compute thesaurus lsh value
+        Addr xored_thesaurus_lsh := dataProc.compute_thesaurus_lsh_fingerprint(newData, thesaurus_fingerprint_bits, block_size_in_bytes);
+        bool centroid_cache_hit := centroidCache.isTagPresent(xored_thesaurus_lsh);
+        bool centroid_memory_hit := centroidMemory.isTagPresent(xored_thesaurus_lsh);
+        centroidCache.profileRead();
+        if (!centroid_memory_hit) { // memory has not seen this lsh yet, add it 
+            DPRINTF(RubyThesaurus, "centroid memory insert thesaurus_lsh=%#x\n", xored_thesaurus_lsh);
+            assert(centroidMemory.cacheAvail(xored_thesaurus_lsh));
+            centroidMemory.allocate(xored_thesaurus_lsh, new Entry);
+            static_cast(Entry, "pointer", centroidMemory[xored_thesaurus_lsh]).DataBlk := newData;
+            centroidMemory.profileRead();
+        } else {
+            centroidMemory.incrementCounter(xored_thesaurus_lsh); // one more line added to the cluster
+        }
+        if (!centroid_cache_hit) { // no penalty on cache miss because we have the centroid right now so no need to look elsewhere
+            if (centroidCache.cacheAvail(xored_thesaurus_lsh)) { // cache miss but has space => insert it
+                centroidCache.allocate(xored_thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x\n", xored_thesaurus_lsh);
+            } else {
+                Addr victim_lsh := centroidCache.cacheProbe(xored_thesaurus_lsh);
+                assert(victim_lsh != xored_thesaurus_lsh);
+                centroidCache.deallocate(victim_lsh); // evict the victim and insert it
+                centroidCache.allocate(xored_thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x, evicted %#x\n", xored_thesaurus_lsh, victim_lsh);
+            }
+        } else {
+            centroidCache.setMRU(xored_thesaurus_lsh);
+        }
+
+        DataBlock centroid_data_blk := static_cast(Entry, "pointer", centroidMemory[xored_thesaurus_lsh]).DataBlk;
+        ////////// compute thesaurus lsh value
+
+        int comp_data_size_in_byte := dataProc.compress(newData, centroid_data_blk);
+        DPRINTF(RubySlicc, "4.compressed size %d\n", comp_data_size_in_byte);
+        
+        int orig_size := data.getDataSize(primary_addr);
+        APPEND_TRANSITION_COMMENT(" origi:");
+        APPEND_TRANSITION_COMMENT(orig_size);
+
+        DPRINTF(RubyDataUpdate, "primary 0x%llx %d -> %d\n", primary_addr, orig_size, comp_data_size_in_byte);
+        data.updateDataSize(primary_addr, comp_data_size_in_byte);
+        DPRINTF(RubySlicc, "5.update data size for addr 0x%llx\n", primary_addr);
+        
+        APPEND_TRANSITION_COMMENT(" new:");
+        APPEND_TRANSITION_COMMENT(data.getDataSize(primary_addr));
+        // removes currently XORed data and xor this new data with current data and add newly xored data toward entropy calculation
+        // does data size update
+    }
+}
+
+// mr_writeDataToCacheFromRequest alternative: this action is used on L1_PUTX events
+action(find_centroid_compress_write_reqdata, "ctr_findcomp_req", desc="find centroid on compressing using putx msg data blk and update mem and cache") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+        assert(is_valid(cache_entry));
+        // compute thesaurus lsh value
+        Addr thesaurus_lsh := dataProc.compute_thesaurus_lsh_fingerprint(in_msg.DataBlk, thesaurus_fingerprint_bits, block_size_in_bytes);
+        bool centroid_cache_hit := centroidCache.isTagPresent(thesaurus_lsh);
+        bool centroid_memory_hit := centroidMemory.isTagPresent(thesaurus_lsh);
+        centroidCache.profileRead();
+        if (!centroid_memory_hit) { // memory has not seen this lsh yet, add it 
+            DPRINTF(RubyThesaurus, "centroid memory insert thesaurus_lsh=%#x\n", thesaurus_lsh);
+            assert(centroidMemory.cacheAvail(thesaurus_lsh));
+            centroidMemory.allocate(thesaurus_lsh, new Entry);
+            static_cast(Entry, "pointer", centroidMemory[thesaurus_lsh]).DataBlk := in_msg.DataBlk;
+            centroidMemory.profileRead();
+        } else {
+            centroidMemory.incrementCounter(thesaurus_lsh); // one more line added to the cluster
+        }
+
+        if (!centroid_cache_hit) { // no penalty on cache miss because we have the centroid right now so no need to look elsewhere
+            if (centroidCache.cacheAvail(thesaurus_lsh)) { // cache miss but has space => insert it
+                centroidCache.allocate(thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x\n", thesaurus_lsh);
+            } else {
+                Addr victim_lsh := centroidCache.cacheProbe(thesaurus_lsh);
+                assert(victim_lsh != thesaurus_lsh);
+                centroidCache.deallocate(victim_lsh); // evict the victim and insert it
+                centroidCache.allocate(thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x, evicted %#x\n", thesaurus_lsh, victim_lsh);
+            }
+        } else {
+            centroidCache.setMRU(thesaurus_lsh);
+        }
+
+        DataBlock centroid_data_blk := static_cast(Entry, "pointer", centroidMemory[thesaurus_lsh]).DataBlk;
+        if (in_msg.Dirty) {
+            cache_entry.DataBlk := in_msg.DataBlk;
+            cache_entry.DataBlk_phy := in_msg.DataBlk;
+            cache_entry.Dirty := in_msg.Dirty;
+        }
+        DPRINTF(RubySlicc, "cache_entry.DataBlk: %s\n", cache_entry.DataBlk);
+        DPRINTF(RubySlicc, "cache_entry.DataBlk_phy: %s\n", cache_entry.DataBlk_phy);
+        DPRINTF(RubySlicc, "cache_entry.Dirty: %s\n", cache_entry.Dirty);
+
+        int comp_data_size_in_byte := dataProc.compress(in_msg.DataBlk, centroid_data_blk);
+        DPRINTF(RubySlicc, "compressed size %d\n", comp_data_size_in_byte);
+        Addr primary_addr := L2cache.getPrimaryAddr(address);
+
+        int orig := data.getDataSize(primary_addr);
+        assert(orig == block_size_in_bytes);
+        APPEND_TRANSITION_COMMENT(" origi:");
+        APPEND_TRANSITION_COMMENT(orig);
+
+        DPRINTF(RubyDataUpdate, "primary 0x%llx %d -> %d\n", primary_addr, orig, comp_data_size_in_byte);
+        data.updateDataSize(primary_addr, comp_data_size_in_byte);
+        DPRINTF(RubySlicc, "5.update data size for addr 0x%llx\n", primary_addr);
+
+        APPEND_TRANSITION_COMMENT(" new:");
+        APPEND_TRANSITION_COMMENT(data.getDataSize(primary_addr));
+        DPRINTF(RubyDataEntropy, "Insertion %llx:%s\n", primary_addr, cache_entry.DataBlk);
+    }
+}
+// mpxr_writePhyDataToCache_XOR_fromRequest_compress_update alternative: this action is used on L1_PUTX_XOR events
+action(find_centroid_compress_write_reqdata_xor, "ctr_findcomp_wbx", desc="find centroid on compressing using putx msg data blk and update mem and cache") {
+    peek(L1RequestL2Network_in, RequestMsg) {
+        assert(is_valid(cache_entry));
+        Addr primary_addr := L2cache.getPrimaryAddr(address);
+        DPRINTF(RubySlicc, "1.cache_entry.DataBlk_phy before xor: %s\n", cache_entry.DataBlk_phy);
+
+        DPRINTF(RubySlicc, "2.xorer: %s\n", in_msg.DataBlk);
+        DataBlock newData := dataProc.preprocess(cache_entry.DataBlk_phy, in_msg.DataBlk);
+        cache_entry.DataBlk_phy := newData;
+        DPRINTF(RubySlicc, "3.cache_entry.DataBlk_phy after xor: %s\n", cache_entry.DataBlk_phy);
+        
+        // compute thesaurus lsh value
+        Addr xored_thesaurus_lsh := dataProc.compute_thesaurus_lsh_fingerprint(newData, thesaurus_fingerprint_bits, block_size_in_bytes);
+        bool centroid_cache_hit := centroidCache.isTagPresent(xored_thesaurus_lsh);
+        bool centroid_memory_hit := centroidMemory.isTagPresent(xored_thesaurus_lsh);
+        centroidCache.profileRead();
+        if (!centroid_memory_hit) { // memory has not seen this lsh yet, add it 
+            DPRINTF(RubyThesaurus, "centroid memory insert thesaurus_lsh=%#x\n", xored_thesaurus_lsh);
+            assert(centroidMemory.cacheAvail(xored_thesaurus_lsh));
+            centroidMemory.allocate(xored_thesaurus_lsh, new Entry);
+            static_cast(Entry, "pointer", centroidMemory[xored_thesaurus_lsh]).DataBlk := newData;
+            centroidMemory.profileRead();
+        } else {
+            centroidMemory.incrementCounter(xored_thesaurus_lsh); // one more line added to the cluster
+        }
+
+        if (!centroid_cache_hit) { // no penalty on cache miss because we have the centroid right now so no need to look elsewhere
+            if (centroidCache.cacheAvail(xored_thesaurus_lsh)) { // cache miss but has space => insert it
+                centroidCache.allocate(xored_thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x\n", xored_thesaurus_lsh);
+            } else {
+                Addr victim_lsh := centroidCache.cacheProbe(xored_thesaurus_lsh);
+                assert(victim_lsh != xored_thesaurus_lsh);
+                centroidCache.deallocate(victim_lsh); // evict the victim and insert it
+                centroidCache.allocate(xored_thesaurus_lsh, new Entry);
+                DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x, evicted %#x\n", xored_thesaurus_lsh, victim_lsh);
+            }
+        } else {
+            centroidCache.setMRU(xored_thesaurus_lsh);
+        }
+
+        DataBlock centroid_data_blk := static_cast(Entry, "pointer", centroidMemory[xored_thesaurus_lsh]).DataBlk;
+        DPRINTF(RubySlicc, "cache_entry.DataBlk: %s\n", cache_entry.DataBlk);
+        DPRINTF(RubySlicc, "cache_entry.DataBlk_phy: %s\n", cache_entry.DataBlk_phy);
+        DPRINTF(RubySlicc, "cache_entry.Dirty: %s\n", cache_entry.Dirty);
+
+        int comp_data_size_in_byte := dataProc.compress(newData, centroid_data_blk);
+        DPRINTF(RubySlicc, "compressed size %d\n", comp_data_size_in_byte);
+
+        int orig := data.getDataSize(primary_addr);
+        // assert(orig == block_size_in_bytes);
+        APPEND_TRANSITION_COMMENT(" origi:");
+        APPEND_TRANSITION_COMMENT(orig);
+
+        DPRINTF(RubyDataUpdate, "primary 0x%llx %d -> %d\n", primary_addr, orig, comp_data_size_in_byte);
+        data.updateDataSize(primary_addr, comp_data_size_in_byte);
+        DPRINTF(RubySlicc, "5.update data size for addr 0x%llx\n", primary_addr);
+
+        APPEND_TRANSITION_COMMENT(" new:");
+        APPEND_TRANSITION_COMMENT(data.getDataSize(primary_addr));
+        DPRINTF(RubyDataEntropy, "Insertion %llx:%s\n", primary_addr, cache_entry.DataBlk);
+    }
+}
+
+// mn_writeBrandNewDataToCache alternative: this action is used on wb_data events
+// same as find_centroid_compress_write_memdata
+
+// ppp_populatePhyData_fromBlk1and2 alternative: this action is used on Goto_.* events
+action(find_centroid_compress_write_fromBlk1and2, "ctr_findcomp_pppx", desc="update physical data to be the xor result of blk1 and blk2") {
+    assert(is_valid(cache_entry));
+    Addr primary_addr := L2cache.getPrimaryAddr(address);
+    DPRINTF(RubySlicc, "cache_entry.DataBlk_phy before xor: %s\n", cache_entry.DataBlk_phy);
+
+    DPRINTF(RubySlicc, "blk1: %s\n", cache_entry.DataBlk);
+    DPRINTF(RubySlicc, "blk2: %s\n", cache_entry.DataBlk2);
+    DataBlock newData := dataProc.preprocess(cache_entry.DataBlk, cache_entry.DataBlk2);
+    cache_entry.DataBlk_phy := newData;
+    DPRINTF(RubySlicc, "cache_entry.DataBlk_phy after xor: %s\n", cache_entry.DataBlk_phy);
+
+    int orig_size := data.getDataSize(primary_addr);
+    APPEND_TRANSITION_COMMENT(" origi:");
+    APPEND_TRANSITION_COMMENT(orig_size);
+    DPRINTF(RubyDataUpdate, "primary 0x%llx origsize %d\n", primary_addr, orig_size);
+
+
+    // compute thesaurus lsh value
+    Addr thesaurus_lsh := dataProc.compute_thesaurus_lsh_fingerprint(newData, thesaurus_fingerprint_bits, block_size_in_bytes);
+    bool centroid_cache_hit := centroidCache.isTagPresent(thesaurus_lsh);
+    bool centroid_memory_hit := centroidMemory.isTagPresent(thesaurus_lsh);
+    centroidCache.profileRead();
+    if (!centroid_memory_hit) { // memory has not seen this lsh yet, add it 
+        DPRINTF(RubyThesaurus, "centroid memory insert thesaurus_lsh=%#x\n", thesaurus_lsh);
+        assert(centroidMemory.cacheAvail(thesaurus_lsh));
+        centroidMemory.allocate(thesaurus_lsh, new Entry);
+        static_cast(Entry, "pointer", centroidMemory[thesaurus_lsh]).DataBlk := newData;
+        centroidMemory.profileRead();
+    } else {
+        centroidMemory.incrementCounter(thesaurus_lsh); // one more line added to the cluster
+    }
+
+    if (!centroid_cache_hit) { // no penalty on cache miss because we have the centroid right now so no need to look elsewhere
+        if (centroidCache.cacheAvail(thesaurus_lsh)) { // cache miss but has space => insert it
+            centroidCache.allocate(thesaurus_lsh, new Entry);
+            DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x\n", thesaurus_lsh);
+        } else {
+            Addr victim_lsh := centroidCache.cacheProbe(thesaurus_lsh);
+            assert(victim_lsh != thesaurus_lsh);
+            centroidCache.deallocate(victim_lsh); // evict the victim and insert it
+            centroidCache.allocate(thesaurus_lsh, new Entry);
+            DPRINTF(RubyThesaurus, "centroid cache insert thesaurus_lsh=%#x, evicted %#x\n", thesaurus_lsh, victim_lsh);
+        }
+    } else {
+        centroidCache.setMRU(thesaurus_lsh);
+    }
+
+    DataBlock centroid_data_blk := static_cast(Entry, "pointer", centroidMemory[thesaurus_lsh]).DataBlk;
+    int comp_data_size_in_byte := dataProc.compress(newData, centroid_data_blk);
+    DPRINTF(RubySlicc, "compressed size %d\n", comp_data_size_in_byte);
+
+    DPRINTF(RubyDataUpdate, "primary 0x%llx %d -> %d\n", primary_addr, orig_size, comp_data_size_in_byte);
+    data.updateDataSize(primary_addr, comp_data_size_in_byte);
+    DPRINTF(RubySlicc, "update data size for addr 0x%llx\n", primary_addr);
+    
+    APPEND_TRANSITION_COMMENT(" new:");
+    APPEND_TRANSITION_COMMENT(data.getDataSize(primary_addr));
+  }
+
+//%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% decompressing (data-out) %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

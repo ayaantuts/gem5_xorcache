@@ -7,12 +7,12 @@
 
 
 declare -a bench=(
-    "2d_convolution"
-    "dwt53"
-    # "histogram_equalization"
-    "change-detection"
-    "debayer"
-    "lucas-kanade"
+    # "2d_convolution"
+    # "dwt53"
+    "histogram_equalization"
+    # "change-detection"
+    # "debayer"
+    # "lucas-kanade"
 )
 
 declare -a protocol=(
@@ -32,27 +32,33 @@ declare -a shift=(
     # 31
 )
 
+CACHECFG="skylake"
+# CACHECFG="realistic"
+
+
 for SHIFT in ${shift[@]};do
     for PROT in "${protocol[@]}"
     do
         for BEN in "${bench[@]}"
         do
-            tmux has-session -t ${PROT}${SHIFT} 2>/dev/null
+            tmux has-session -t ${PROT}${SHIFT}_${CACHECFG} 2>/dev/null
             if [ $? != 0 ]; then
                 # Set up your session
-                echo "create new session ${PROT}${SHIFT}"
+                echo "create new session ${PROT}${SHIFT}_${CACHECFG}"
                 echo "$BEN"
-                tmux new-session -d -s ${PROT}${SHIFT} -n $BEN 
-                tmux send-keys -t ${PROT}${SHIFT}:$BEN "python3 my_scripts/fs/ruby/run_perfect_dump_checkpoints.py \
+                tmux new-session -d -s ${PROT}${SHIFT}_${CACHECFG} -n $BEN 
+                tmux send-keys -t ${PROT}${SHIFT}_${CACHECFG}:$BEN "python3 my_scripts/fs/ruby/run_perfect_dump_checkpoints.py \
                 --benchmark ${BEN} \
                 --protocol $PROT \
+                --cachecfg ${CACHECFG} \
                 --index_bits_shift ${SHIFT}" C-m
             else
                 echo "$BEN"
-                tmux new-window -n $BEN -t ${PROT}${SHIFT}:
-                tmux send-keys -t ${PROT}${SHIFT}:$BEN "python3 my_scripts/fs/ruby/run_perfect_dump_checkpoints.py \
+                tmux new-window -n $BEN -t ${PROT}${SHIFT}_${CACHECFG}:
+                tmux send-keys -t ${PROT}${SHIFT}_${CACHECFG}:$BEN "python3 my_scripts/fs/ruby/run_perfect_dump_checkpoints.py \
                 --benchmark ${BEN} \
                 --protocol $PROT \
+                --cachecfg ${CACHECFG} \
                 --index_bits_shift ${SHIFT}" C-m
             fi
         done

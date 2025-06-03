@@ -19,16 +19,16 @@ NUMCKPT=100
 
 declare -a run=(
     1
-    2
-    3
-    4
-    5
-    6
-    7
-    8
-    9
-    10
-    11
+    # 2
+    # 3
+    # 4
+    # 5
+    # 6
+    # 7
+    # 8
+    # 9
+    # 10
+    # 11
 )
 
 # NUMPROC=16
@@ -36,29 +36,34 @@ declare -a run=(
 NUMPROC=4
 NUMCORE=4
 
+CACHECFG="skylake"
+# CACHECFG="realistic"
+
 for RUN in ${run[@]};do
-    tmux has-session -t spec_c${NUMCORE}_p${NUMPROC} 2>/dev/null
+    tmux has-session -t spec_c${NUMCORE}_p${NUMPROC}_${CACHECFG} 2>/dev/null
     if [ $? != 0 ]; then
         # Set up your session
-        echo "create new session spec_c${NUMCORE}_p${NUMPROC}"
+        echo "create new session spec_c${NUMCORE}_p${NUMPROC}_${CACHECFG}"
         echo "$RUN"
-        tmux new-session -d -s spec_c${NUMCORE}_p${NUMPROC} -n $RUN 
-        tmux send-keys -t spec_c${NUMCORE}_p${NUMPROC}:$RUN "python3 my_scripts/fs/ruby/run_spec2017_dump_checkpoints.py \
+        tmux new-session -d -s spec_c${NUMCORE}_p${NUMPROC}_${CACHECFG} -n $RUN 
+        tmux send-keys -t spec_c${NUMCORE}_p${NUMPROC}_${CACHECFG}:$RUN "python3 my_scripts/fs/ruby/run_spec2017_dump_checkpoints.py \
         --run ${RUN} \
         --numProcesses ${NUMPROC} \
         --fully_util 1 \
         --core ${NUMCORE} \
         --num_checkpoint ${NUMCKPT} \
+        --cachecfg ${CACHECFG} \
         --flags RubyProfiler ${KVM_FLAG}" C-m
     else
         echo "$RUN"
-        tmux new-window -n $RUN -t spec_c${NUMCORE}_p${NUMPROC}:
-        tmux send-keys -t spec_c${NUMCORE}_p${NUMPROC}:$RUN "python3 my_scripts/fs/ruby/run_spec2017_dump_checkpoints.py \
+        tmux new-window -n $RUN -t spec_c${NUMCORE}_p${NUMPROC}_${CACHECFG}:
+        tmux send-keys -t spec_c${NUMCORE}_p${NUMPROC}_${CACHECFG}:$RUN "python3 my_scripts/fs/ruby/run_spec2017_dump_checkpoints.py \
         --run ${RUN} \
         --numProcesses ${NUMPROC} \
         --fully_util 1 \
         --core ${NUMCORE} \
         --num_checkpoint ${NUMCKPT} \
+        --cachecfg ${CACHECFG} \
         --flags RubyProfiler ${KVM_FLAG}" C-m
     fi
 done

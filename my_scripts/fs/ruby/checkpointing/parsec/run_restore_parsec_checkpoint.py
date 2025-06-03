@@ -72,13 +72,20 @@ parser.add_argument(
     choices=benchmark_choices,
 )
 parser.add_argument(
-    "--use_anonymous_latency",
-    type=bool,
-    required=False,
-    default=False,
-    help="assign cache latency regardless of size",
+    "--cachecfg",
+    type=str,
+    required=True,
+    help="for 3 level cache, choose either skylake or worse",
+    choices=["skylake", "realistic", "size512kB", "size2048kB"],
 )
-
+parser.add_argument(
+    "--comparison",
+    type=str,
+    required=False,
+    help="for 3 level cache, choose either isoperf or isoarea",
+    choices=["isoperf", "isoarea"],
+    default="isoperf",
+)
 parser.add_argument(
     "--index_bits_shift",
     type=int,
@@ -92,22 +99,6 @@ parser.add_argument(
     required=True,
     help="Simulation size the benchmark program.",
     choices=size_choices,
-)
-# parser.add_argument(
-#     "--set",
-#     type=str,
-#     required=False,
-#     default="ser",
-#     help="run config",
-#     choices=["ser", "omp"],
-# )
-parser.add_argument(
-    "--l2size",
-    type=str,
-    required=False,
-    default="256kB",
-    help="l2size string",
-    choices=["32kB", "64kB", "128kB","256kB","512kB", "1024kB", "1408kB", "2048kB"],
 )
 parser.add_argument(
     "--xor_folding_scheme",
@@ -153,6 +144,13 @@ parser.add_argument(
     help='xor policy name',
 )
 parser.add_argument(
+    "--llc_lat",
+    type=int,
+    required=False,
+    default=40,
+    help='llc latency',
+)
+parser.add_argument(
     "--core",
     type=int,
     required=False,
@@ -163,12 +161,19 @@ parser.add_argument(
     "--protocol",
     type=str,
     help="which protocol to run",
-    choices=["baseline", "noisy", "decoupled", "compress", "dedup","bdixor",
+    choices=[
              "msi_nine_xor_bdi_map", "msi_nine_noxor_bdi_map",
              "msi_nine_xor_nobdi_map", "msi_nine_noxor_nobdi_map",
              "msi_exc_nobdi", "msi_exc_bdi",
              "mesi2_inc_nobdi", "mesi2_inc_bdi",
-             "msi_nine_noxor_nobdi_map3", "msi_nine_xor_bdi_map3", "msi_nine_noxor_bdi_map3", "msi_nine_xor_nobdi_map3",
+            "mesi3",
+             "msi_exc3", "msi_exc_bdi3",
+             "msi_nine_noxor_nobdi_map3", 
+             "msi_nine_xor_bdi_map3", "msi_nine_xor_thesaurus_map3",
+             "msi_nine_noxor_bdi_map3", "msi_nine_noxor_thesaurus_map3",
+             "msi_nine_xor_nobdi_map3",
+             "msi_nine_noxor_bpc_map3",
+             "sensitivity_test",
              ],
     required=True,
 )
@@ -193,6 +198,9 @@ parser.add_argument('--record_line_level_entropy', action='store_true')
 parser.add_argument('--no-record_line_level_entropy', dest='record_line_level_entropy', action='store_false')
 parser.set_defaults(record_line_level_entropy=False)
 
+parser.add_argument('--tagptr', action='store_true')
+parser.add_argument('--no-tagptr', dest='tagptr', action='store_false')
+parser.set_defaults(tagptr=True)
 
 parser.add_argument('--ooo', action='store_true')
 parser.add_argument('--no-ooo', dest='ooo', action='store_false')
@@ -263,29 +271,13 @@ if args.begin and args.end:
     interval = (args.begin, args.end)
     debug_interval = f'--debug-start={interval[0]} --debug-end={interval[1]}'
 
-if args.protocol == "baseline":
-    design = "test"
-elif args.protocol == "noisy":
-    design = "MyMESI2"
-    design_out = "MyMESI2_Noisy"
-elif args.protocol == "decoupled":
-    design = "MyMESI2_Decoupled"
-    design_out = design
-elif args.protocol == "compress":
-    design = "MyMESI2_Compress"
-    design_out = design
-elif args.protocol == "dedup":
-    design = "MyMESI2_Dedup"
-    design_out = design
-elif args.protocol == "bdixor":
-    design = "MyMESI2_BDI_XOR"
-    design_out = design
-elif args.protocol == "xor":
-    design = "MyMESI2_BDI_XOR"
-    design_out = "MyMESI2_XOR"
-elif args.protocol == "msi":
+
+if args.protocol == "msi":
     design = "MyMSI"
     design_out = "MyMSI"
+elif args.protocol == "mesi3":
+    design = "MESI_Three_Level"
+    design_out = "MESI_Three_Level"
 elif args.protocol == "msi_nine":
     design = "MyMSI_NINE"
     design_out = "MyMSI_NINE"
@@ -311,53 +303,56 @@ elif args.protocol == "msi_nine_noxor_nobdi_map":
 elif args.protocol == "msi_nine_xor_bdi_map3":
     design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_XOR_BDI_MAP3"
+elif args.protocol == "msi_nine_xor_thesaurus_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP_THESAURUS"
+    design_out = "MyMSI_NINE_XOR_THESAURUS_MAP3"
 elif args.protocol == "msi_nine_xor_nobdi_map3":
     design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_XOR_NOBDI_MAP3"
 elif args.protocol == "msi_nine_noxor_bdi_map3":
     design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_NOXOR_BDI_MAP3"
+elif args.protocol == "msi_nine_noxor_bpc_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "MyMSI_NINE_NOXOR_BPC_MAP3"
+elif args.protocol == "msi_nine_noxor_thesaurus_map3":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP_THESAURUS"
+    design_out = "MyMSI_NINE_NOXOR_THESAURUS_MAP3"
 elif args.protocol == "msi_nine_noxor_nobdi_map3":
     design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
     design_out = "MyMSI_NINE_NOXOR_NOBDI_MAP3"
+elif args.protocol == "sensitivity_test":
+    design = "MyMSI_THREELEVEL_NINE_XOR_MAP"
+    design_out = "sensitivityTest"
 
 elif args.protocol == "msi_exc_nobdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_NOBDI"
+elif args.protocol == "msi_exc3":
+    design = "MyMSI_EXC3"
+    design_out = "MyMSI_EXC3"
+elif args.protocol == "msi_exc_bdi3":
+    design = "MyMSI_EXC3"
+    design_out = "MyMSI_EXC_BDI3"
 elif args.protocol == "msi_exc_bdi":
     design = "MyMSI_EXC"
     design_out = "MyMSI_EXC_BDI"
-
-elif args.protocol == "mesi2_inc_nobdi":
-    design = "MyMESI2_INC_INTRACOMP"
-    design_out = "MyMESI2_INC_NOBDI"
-elif args.protocol == "mesi2_inc_bdi":
-    design = "MyMESI2_INC_INTRACOMP"
-    design_out = "MyMESI2_INC_BDI"
-
-elif re.search("xor_(\d)(\d)(\d)",args.protocol): 
-    design = "MyMESI2_BDI_XOR"
-    design_out = "MyMESI2_XOR"
-
-    parameters = re.search("xor_(\d)(\d)(\d)",args.protocol)
-    p_dpe = bool(int(parameters.group(1)))
-    p_sis = bool(int(parameters.group(2)))
-    p_xpi = int(parameters.group(3))
-
-    design_out += "_wProac" if p_dpe else "_woProac"
-    design_out += "_set" if p_sis else "_bank"
-    if p_xpi == 1: design_out += "_greedy_ran"
-    elif p_xpi == 2: design_out += "_nongreedy_ran"
-    elif p_xpi == 3: design_out += "_greedy_mru"
-    elif p_xpi == 4: design_out += "_nongreedy_mru"
-    else: assert False
+else:
+    logger.error(f"protocol {args.protocol} not found!")
+    exit(1)
 
 testname= f"fs_ruby_{args.suite_name}_from_checkpoint"
-py_config_file_name = "x86-parsec-restore-checkpoint.py"
 
-if args.use_anonymous_latency:
-    folder_name = "anonymous_latency"
-else: folder_name = ""
+if args.comparison == "isoperf":
+    py_config_file_name = "x86-parsec-restore-checkpoint-3level-isoperf.py"
+    assert args.protocol != "sensitivity_test", \
+        "isoperf experiment is not needed for this sensitivity test"
+else:
+    py_config_file_name = "x86-parsec-restore-checkpoint-3level-isoarea.py"
+    assert args.protocol != "msi_nine_noxor_nobdi_map3" and args.protocol != "mesi3", \
+        "isoarea experiment is not needed for this protocol"
+
+folder_name = "anonymous_latency"
 
 if args.ooo == True:
     if folder_name == "": folder_name = "ooo"
@@ -373,7 +368,9 @@ else:
 
 if args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_noxor_bdi_map" or \
     args.protocol == "msi_nine_xor_nobdi_map" or \
-    args.protocol == "msi_nine_xor_bdi_map3" or args.protocol == "msi_nine_noxor_bdi_map3" or \
+    args.protocol == "msi_nine_xor_bdi_map3" or args.protocol == "msi_nine_xor_thesaurus_map3" or\
+    args.protocol == "msi_nine_noxor_bdi_map3" or args.protocol == "msi_nine_noxor_thesaurus_map3" or \
+    args.protocol == "msi_nine_noxor_bpc_map3" or \
     args.protocol == "msi_nine_xor_nobdi_map3" or \
     args.protocol == "msi_exc_bdi":
     ratio = args.l2factor
@@ -382,7 +379,9 @@ else:
     ratio_str = ""
 
 if args.protocol == "msi_nine_noxor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map" or \
-    args.protocol == "msi_nine_noxor_bdi_map3" or args.protocol == "msi_nine_xor_bdi_map3" or \
+    args.protocol == "msi_nine_noxor_bdi_map3" or args.protocol == "msi_nine_noxor_thesaurus_map3" or \
+    args.protocol == "msi_nine_noxor_bpc_map3" or \
+     args.protocol == "msi_nine_xor_bdi_map3" or args.protocol == "msi_nine_xor_thesaurus_map3" or \
     args.protocol == "msi_exc_bdi":
     region = args.l2_data_regions
     region_str = f"_{region}region"
@@ -403,13 +402,18 @@ elif args.xor_folding_scheme == 2:
     transition_mapbit_str += "_hycomp"
 else: assert False
 
-if (args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3") and args.index_bits_shift != 0:
+if (args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3" or args.protocol == "msi_nine_xor_thesaurus_map3") and args.index_bits_shift != 0:
     transition_mapbit_str += f"_idxshift{args.index_bits_shift}"
+    
+if args.llc_lat:
+    transition_mapbit_str += f"_llclat{args.llc_lat}"
+if args.tagptr == False:
+    transition_mapbit_str += "_notagptr"
 
 if args.do_warmup:
     assert False
 else:
-    path = f"m5out/m5out_{testname}/{folder_name}/{design_out}_{args.l2size}{ratio_str}{seg_str}{region_str}{transition_mapbit_str}/c{args.core}/{args.benchmark}-{args.size}"
+    path = f"m5out/m5out_{testname}/{folder_name}_{args.comparison}/{design_out}_{args.cachecfg}{ratio_str}{seg_str}{region_str}{transition_mapbit_str}/c{args.core}/{args.benchmark}-{args.size}"
 
 
 
@@ -436,30 +440,40 @@ cmd_list[0] += f" --warmup_instr_step {selected_warmup_instr_step}"
 if args.core: cmd_list[0] += f" --core {args.core}"
 
 cmd_list[0] += f" --benchmark {args.benchmark} --size {args.size}"
-cmd_list[0] += f" --l2size {args.l2size}"
 cmd_list[0] += f" --l2_transitions_per_cycle {args.l2_transitions_per_cycle}"
 cmd_list[0] += f" --xor_policy {args.xor_policy}"
 cmd_list[0] += f" --l2_map_bits {args.l2_map_bits}"
 cmd_list[0] += f" --l2_num_maptable_set {args.l2_num_maptable_set}"
 cmd_list[0] += f" --l2_list_capacity {args.l2_list_capacity}"
+cmd_list[0] += f" --cachecfg {args.cachecfg}"
 
-if args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3":
+if args.protocol == "msi_nine_xor_bdi_map" or args.protocol == "msi_nine_xor_bdi_map3" or args.protocol == "msi_nine_xor_thesaurus_map3":
     cmd_list[0] += f" --l2factor_xor_bdi {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
     cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
-elif args.protocol == "msi_nine_noxor_bdi_map" or args.protocol == "msi_nine_noxor_bdi_map3":
+elif args.protocol == "msi_nine_noxor_bdi_map" or \
+    args.protocol == "msi_nine_noxor_bdi_map3"  or \
+    args.protocol == "msi_nine_noxor_bpc_map3"  or \
+    args.protocol == "msi_nine_noxor_thesaurus_map3":
     cmd_list[0] += f" --l2factor_bdi {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
     cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
 elif args.protocol == "msi_nine_xor_nobdi_map" or args.protocol == "msi_nine_xor_nobdi_map3":
     cmd_list[0] += f" --l2factor_xor {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size 64"
-elif args.protocol == "msi_nine_noxor_nobdi_map" or args.protocol == "msi_nine_noxor_nobdi_map3":
+elif args.protocol == "msi_nine_noxor_nobdi_map" or args.protocol == "msi_nine_noxor_nobdi_map3"\
+    or args.protocol == "sensitivity_test":
     cmd_list[0] += f" --l2_data_segment_size 64"
-
-elif args.protocol == "msi_exc_nobdi":
+elif args.protocol == "mesi3":
     cmd_list[0] += f" --l2_data_segment_size 64"
     cmd_list[0] += f" --l2_data_regions 1"
+
+elif args.protocol == "msi_exc_nobdi" or args.protocol == "msi_exc3":
+    cmd_list[0] += f" --l2_data_segment_size 64"
+    cmd_list[0] += f" --l2_data_regions 1"
+elif args.protocol == "msi_exc_bdi3":
+    cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
+    cmd_list[0] += f" --l2_data_regions {args.l2_data_regions}"
 elif args.protocol == "msi_exc_bdi":
     cmd_list[0] += f" --l2factor_bdi {args.l2factor}"
     cmd_list[0] += f" --l2_data_segment_size {args.l2_data_segment_size}"
@@ -478,10 +492,11 @@ if args.protocol == "msi_nine_xor_bdi_map":
 else:
     cmd_list[0] += f" --index_bits_shift 0"
 
-if args.use_anonymous_latency:
-    cmd_list[0] += f" --anonymous_latency 1"
 if args.ooo == True:
     cmd_list[0] += f" --ooo"
+
+if args.tagptr == False:
+    cmd_list[0] += f" --no-tagptr"
 
 if args.record_line_level_entropy == True:
     cmd_list[0] += f" --record_line_level_entropy"
