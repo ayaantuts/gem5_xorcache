@@ -3,3 +3,5 @@ build
 .vscode
 diagram.pdf
 diagram.txt
+__pycache__
+system_files
