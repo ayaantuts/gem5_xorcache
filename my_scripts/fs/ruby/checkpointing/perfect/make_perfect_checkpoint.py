@@ -121,7 +121,7 @@ if not os.path.isfile(gem5_binary):
 cmd_list = [f"nohup time {gem5_binary} -d {path} " + \
 f"{debug_flag} {debug_interval} configs/my_configs/fs/ruby/perfect/checkpointing/{py_config_file_name} "
     ]
-cmd_list[0] += f" --image /home/zhewen/repo/gem5-resources/src/perfect/disk-image/perfect/perfect-image/perfect"
+cmd_list[0] += f" --image /gem5_xorcache/system_files/disks/x86-ubuntu.img"
 if args.kernel_args: cmd_list[0] += f" --kernel_args {args.kernel_args}"
 cmd_list[0] += f" --protocol {args.protocol}"
 cmd_list[0] += f" --set {args.set}"
